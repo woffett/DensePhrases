@@ -20,7 +20,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 logger = logging.getLogger(__name__)
 
 
-class MIPS(object):
+class MSMIPS(object):
     def __init__(self, phrase_dump_dir, index_path, idx2id_path, cuda=False, logging_level=logging.INFO):
         self.phrase_dump_dir = phrase_dump_dir
 
@@ -153,18 +153,27 @@ class MIPS(object):
         return each
 
     def search_dense(self, query, q_texts, nprobe=256, top_k=10):
+        # call this in a loop over the sequence indices?
+        # change to perform query without splitting
         batch_size, d = query.shape
         self.index.nprobe = nprobe
+
+        '''
+        1. query w/ (weighted?) sum of all tokens
+        2. query individually w/ all tokens, aggregate to form candidate list <- very very expensive if done naively
+            - could perform each query with top_k / num_tokens?
+        '''
 
         # Stack start/end and benefit from multi-threading
         start_time = time()
         query = query.astype(np.float32)
-        query_start, query_end = np.split(query, 2, axis=1) # each is batch_size x emb_dim
-        query_concat = np.concatenate((query_start, query_end), axis=0) # (batch_size * 2) x emb_dim
+        # no longer split
+        query_start, query_end = np.split(query, 2, axis=1)
+        query_concat = np.concatenate((query_start, query_end), axis=0)
 
         # Search with faiss
         b_scores, I = self.index.search(query_concat, top_k)
-        b_start_scores, start_I = b_scores[:batch_size,:], I[:batch_size,:] # batch_size x 
+        b_start_scores, start_I = b_scores[:batch_size,:], I[:batch_size,:]
         b_end_scores, end_I = b_scores[batch_size:,:], I[batch_size:,:]
         logger.debug(f'1) {time()-start_time:.3f}s: MIPS')
 
@@ -392,6 +401,10 @@ class MIPS(object):
 
         # MIPS on start/end
         start_time = time()
+
+        # OLD query: batch_size x (emb_dim * 2)
+        # NEW query: batch_size x seq_len x emb_dim
+        
         start_doc_idxs, start_idxs, start_I, end_doc_idxs, end_idxs, end_I, start_scores, end_scores = self.search_dense(
             query,
             q_texts=q_texts,
