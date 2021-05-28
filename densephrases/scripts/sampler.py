@@ -275,9 +275,9 @@ class QAWikiDumpSampler:
         Path(dump_folder).mkdir(exist_ok=True)
         for start in range(n // chunk_size + int(n % chunk_size > 0)):
             dump_chunk = {
-                "data": rows[start * chunk_size : min((start + 1) * chunk_size, n)]
+                "data": rows[start * chunk_size: min((start + 1) * chunk_size, n)]
             }
-            json.dump(dump_chunk, open(f"{dump_folder}/{start}", "w"))
+            json.dump(dump_chunk, open(f"{dump_folder}/{start:04d}", "w"))
 
     def _query_top_indices(self, query: str, top_n: int) -> Iterable[int]:
         query_tokenized = self._tokenize(query)
