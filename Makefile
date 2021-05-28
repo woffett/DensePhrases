@@ -197,7 +197,7 @@ dump-large: model-name
 		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--data_dir $(DPH_DATA_DIR)/wikidump \
-		--data_name dev_wiki \
+		--data_name wiki7500 \
 		--load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--filter_threshold 0.0 \
@@ -267,9 +267,9 @@ limit-threads:
 
 # Dataset paths for open-domain QA and slot filling (with options)
 nq-open-data:
-	$(eval TRAIN_DATA=open-qa/nq-open/train_preprocessed.json)
-	$(eval DEV_DATA=open-qa/nq-open/dev_preprocessed.json)
-	$(eval TEST_DATA=open-qa/nq-open/test_preprocessed.json)
+	$(eval TRAIN_DATA=open-qa/nq-open/train.json)
+	$(eval DEV_DATA=open-qa/nq-open/dev.json)
+	$(eval TEST_DATA=open-qa/nq-open/test.json)
 	$(eval OPTIONS=--truecase)
 wq-open-data:
 	$(eval TRAIN_DATA=open-qa/webq/WebQuestions-train-nodev_preprocessed.json)
