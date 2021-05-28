@@ -14,9 +14,9 @@ Process:
 Resources:
 - Logic is in [`densePhrases.scripts.sampler.py`](densephrases/scripts/sampler.py).
 - Notebook with EDA is at [wikidump-sampler.ipynb](wikidump-sampler.ipynb)
-- Data can be downloaded [here](https://www.dropbox.com/s/m1j6mry32o55j2i/wiki7500.tar.gz?dl=0) or just use `wget`:
+- Data can be downloaded [here](https://www.dropbox.com/s/ntr2fvhzxrjioq2/wiki7500.tar.gz?dl=0) or just use `wget`:
 ```
-wget https://www.dropbox.com/s/m1j6mry32o55j2i/wiki7500.tar.gz?raw=1
+wget https://www.dropbox.com/s/ntr2fvhzxrjioq2/wiki7500.tar.gz?raw=1
 ```
 
 ## Original README starts here
