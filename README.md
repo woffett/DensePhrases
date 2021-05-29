@@ -46,14 +46,12 @@ total 39G
 the files are in `{START}-{END}.hdf5` format.
 
 ### Create a phrase index
-Step 1
+#### Step 1
 ```
 NUM_CLUSTERS=32000
 make index-large DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
-note:
-- by default this runs on GPU and OOMs. I've removed `--cuda` to do this on CPU.
-- tried 10k clusters and it works on CPU. Now trying 100k.
+note: by default this runs on GPU and OOMs. I've removed `--cuda` to do this on CPU. Takes about an hour.
 
 should dump files like this:
 ```
@@ -71,7 +69,10 @@ WARNING clustering 1743371 points to 100000 centroids: please provide at least 3
 
 what is the right number of clusters to use? Omar suggested 2 * sqrt(N) where `N` is the number of embeddings.
 
-Step 2 (fails)
+TODO for amir: in this step are we indexing phrases or paragraphs? i.e. what is `N`? 
+
+#### Step 2
+fails! seems to be safe to skip though
 ```
 make index-add DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS START=0 END=696
 ```
@@ -89,7 +90,8 @@ Error: mkl-service + Intel(R) MKL: MKL_THREADING_LAYER=INTEL is incompatible wit
 	Try to import numpy first or set the threading layer accordingly. Set MKL_SERVICE_FORCE_INTEL to force it.
 ```
 
-Step 3 (fails)
+#### Step 3
+fails! seems to be safe to skip though
 ```
 make index-merge DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
@@ -114,31 +116,15 @@ Makefile:230: recipe for target 'index-merge' failed
 make: *** [index-merge] Error 1
 ```
 
-### Evaluate (fails)
+### Evaluate
 ```
 make eval-dump MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
 
-error:
+Takes about 10 mins and returns:
 ```
-05/29/2021 19:59:48 - INFO - densephrases.models.index -   Reading /home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/50000_flat_SQ4/index.faiss
-Traceback (most recent call last):
-  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 193, in _run_module_as_main
-    "__main__", mod_spec)
-  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 85, in _run_code
-    exec(code, run_globals)
-  File "/home/ubuntu/DensePhrases/densephrases/experiments/run_open.py", line 722, in <module>
-    eval_inmemory(args)
-  File "/home/ubuntu/DensePhrases/densephrases/experiments/run_open.py", line 187, in eval_inmemory
-    mips = load_phrase_index(args)
-  File "/home/ubuntu/DensePhrases/densephrases/experiments/run_open.py", line 111, in load_phrase_index
-    logging_level=logging.DEBUG if args.debug else logging.INFO
-  File "/home/ubuntu/DensePhrases/densephrases/models/index.py", line 30, in __init__
-    self.index = faiss.read_index(index_path, faiss.IO_FLAG_ONDISK_SAME_DIR)
-  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/site-packages/faiss/swigfaiss.py", line 5167, in read_index
-    return _swigfaiss.read_index(*args)
-RuntimeError: Error in faiss::FileIOReader::FileIOReader(const char*) at /__w/faiss-wheels/faiss-wheels/faiss/faiss/impl/io.cpp:82: Error: 'f' failed: could not open /home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/50000_flat_SQ4/index.faiss for reading: No such file or directory
-Makefile:248: recipe for target 'eval-dump' failed
+05/29/2021 23:42:45 - INFO - __main__ -   {'exact_match_top1': 34.8, 'f1_score_top1': 44.29079365079369, 'precision_score_top1': 45.95904761904762, 'recall_score_top1': 44.833333333333314}
+05/29/2021 23:42:45 - INFO - __main__ -   {'exact_match_top10': 61.86666666666667, 'f1_score_top10': 70.1576046176046, 'precision_score_top10': 72.26888888888888, 'recall_score_top10': 70.21111111111111}
 ```
 
 ## Original README starts here
