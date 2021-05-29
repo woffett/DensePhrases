@@ -249,7 +249,7 @@ eval-dump: model-name dump-dir nq-open-data
 		--run_mode eval_inmemory \
 		--cuda \
 		--dump_dir $(DUMP_DIR) \
-		--index_dir start/16384_flat_SQ4 \
+		--index_dir start/50000_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
 		$(OPTIONS)
