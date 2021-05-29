@@ -46,7 +46,7 @@ the files are in `{START}-{END}.hdf5` format.
 ### Create a phrase index
 Step 1
 ```
-NUM_CLUSTERS=100000
+NUM_CLUSTERS=32000
 make index-large DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
 note:
@@ -61,6 +61,13 @@ total 18G
 -rw-rw-r-- 1 ubuntu ubuntu 343M May 29 21:10 idx2id.hdf5
 -rw-rw-r-- 1 ubuntu ubuntu  30M May 29 20:43 trained.faiss
 ```
+
+using 100k:
+```
+WARNING clustering 1743371 points to 100000 centroids: please provide at least 3900000 training points
+```
+
+what is the right number of clusters to use? Omar suggested 2 * sqrt(N) where `N` is the number of embeddings.
 
 Step 2 (fails)
 ```

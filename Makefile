@@ -270,7 +270,7 @@ nq-open-data:
 	$(eval TRAIN_DATA=open-qa/nq-open/train.json)
 	$(eval DEV_DATA=open-qa/nq-open/dev.json)
 	$(eval TEST_DATA=open-qa/nq-open/test.json)
-	$(eval SOD_DATA=open-qa/nq-open/test.json)
+	$(eval SOD_DATA=open-qa/nq-open/dev.json)
 	$(eval OPTIONS=--truecase)
 wq-open-data:
 	$(eval TRAIN_DATA=open-qa/webq/WebQuestions-train-nodev_preprocessed.json)
