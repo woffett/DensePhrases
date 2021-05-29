@@ -211,7 +211,7 @@ index-large: dump-dir
 	python -m densephrases.experiments.create_index \
 		$(DUMP_DIR) all \
 		--replace \
-		--num_clusters 16384 \
+		--num_clusters 101372 \
 		--fine_quant SQ4 \
 		--cuda
 
@@ -220,7 +220,7 @@ index-add: dump-dir
 	export MKL_SERVICE_FORCE_INTEL=1
 	python -m densephrases.experiments.parallel.add_to_index \
 		--dump_dir $(DUMP_DIR) \
-		--num_clusters 1048576 \
+		--num_clusters 101372 \
 		--cuda \
 		--start $(START) \
 		--end $(END)
@@ -229,7 +229,7 @@ index-add: dump-dir
 index-merge: dump-dir
 	python -m densephrases.experiments.create_index \
 	$(DUMP_DIR) merge \
-	--num_clusters 1048576 \
+	--num_clusters 101372 \
 	--replace \
 	--fine_quant SQ4
 
