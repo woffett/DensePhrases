@@ -14,6 +14,8 @@ Process:
 Resources:
 - Logic is in [`densePhrases.scripts.sampler.py`](densephrases/scripts/sampler.py).
 - Notebook with EDA is at [wikidump-sampler.ipynb](wikidump-sampler.ipynb)
+
+used a `g4dn.8xlarge` ec2 instance for all these experiments.
   
 ### Download data
 - Data can be downloaded [here](https://www.dropbox.com/s/4d45t8x4dsue7vy/wiki7500.tar.gz?dl=0) or just use `wget`:
