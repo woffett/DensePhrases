@@ -44,24 +44,79 @@ total 39G
 the files are in `{START}-{END}.hdf5` format.
 
 ### Create a phrase index
-Step 1
+Step 1 (fails with some `malloc` thing)
 ```
 make index-large DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
 ```
 
-Step 2
+Step 2 (fails)
 ```
-make index-add DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+make index-add DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000 START=0 END=696
 ```
 
-Step 3
+error:
+```
+adding with offset:
+0: 0-350.hdf5
+100000000: 351-696.hdf5
+['python', '-mdensephrases.experiments.create_index', '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/', 'add', '--fine_quant', 'SQ4', '--dump_paths', '0-350.hdf5', '--offset', '0', '--num_clusters', '100000', '--cuda']
+Error: mkl-service + Intel(R) MKL: MKL_THREADING_LAYER=INTEL is incompatible with libgomp.so.1 library.
+	Try to import numpy first or set the threading layer accordingly. Set MKL_SERVICE_FORCE_INTEL to force it.
+['python', '-mdensephrases.experiments.create_index', '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/', 'add', '--fine_quant', 'SQ4', '--dump_paths', '351-696.hdf5', '--offset', '100000000', '--num_clusters', '100000', '--cuda']
+Error: mkl-service + Intel(R) MKL: MKL_THREADING_LAYER=INTEL is incompatible with libgomp.so.1 library.
+	Try to import numpy first or set the threading layer accordingly. Set MKL_SERVICE_FORCE_INTEL to force it.
+```
+
+Step 3 (fails)
 ```
 make index-merge DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
 ```
 
-### Evaluate
+error:
 ```
-make eval-dump ...
+Traceback (most recent call last):
+  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 376, in <module>
+    main()
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 372, in main
+    run_index(args)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 359, in run_index
+    merge_indexes(args.subindex_dir, args.trained_index_path, args.index_path, args.idx2id_path, args.inv_path)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 260, in merge_indexes
+    names = os.listdir(subindex_dir)
+FileNotFoundError: [Errno 2] No such file or directory: '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/100000_flat_SQ4/index'
+Makefile:230: recipe for target 'index-merge' failed
+make: *** [index-merge] Error 1
+```
+
+### Evaluate (fails)
+```
+make eval-dump MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+```
+
+error:
+```
+05/29/2021 19:59:48 - INFO - densephrases.models.index -   Reading /home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/50000_flat_SQ4/index.faiss
+Traceback (most recent call last):
+  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/run_open.py", line 722, in <module>
+    eval_inmemory(args)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/run_open.py", line 187, in eval_inmemory
+    mips = load_phrase_index(args)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/run_open.py", line 111, in load_phrase_index
+    logging_level=logging.DEBUG if args.debug else logging.INFO
+  File "/home/ubuntu/DensePhrases/densephrases/models/index.py", line 30, in __init__
+    self.index = faiss.read_index(index_path, faiss.IO_FLAG_ONDISK_SAME_DIR)
+  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/site-packages/faiss/swigfaiss.py", line 5167, in read_index
+    return _swigfaiss.read_index(*args)
+RuntimeError: Error in faiss::FileIOReader::FileIOReader(const char*) at /__w/faiss-wheels/faiss-wheels/faiss/faiss/impl/io.cpp:82: Error: 'f' failed: could not open /home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/50000_flat_SQ4/index.faiss for reading: No such file or directory
+Makefile:248: recipe for target 'eval-dump' failed
 ```
 
 ## Original README starts here
