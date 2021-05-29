@@ -211,7 +211,7 @@ index-large: dump-dir
 	python -m densephrases.experiments.create_index \
 		$(DUMP_DIR) all \
 		--replace \
-		--num_clusters 101372 \
+		--num_clusters 50000 \
 		--fine_quant SQ4 \
 		--cuda
 
@@ -220,7 +220,7 @@ index-add: dump-dir
 	export MKL_SERVICE_FORCE_INTEL=1
 	python -m densephrases.experiments.parallel.add_to_index \
 		--dump_dir $(DUMP_DIR) \
-		--num_clusters 101372 \
+		--num_clusters 50000 \
 		--cuda \
 		--start $(START) \
 		--end $(END)
@@ -229,7 +229,7 @@ index-add: dump-dir
 index-merge: dump-dir
 	python -m densephrases.experiments.create_index \
 	$(DUMP_DIR) merge \
-	--num_clusters 101372 \
+	--num_clusters 50000 \
 	--replace \
 	--fine_quant SQ4
 
@@ -243,7 +243,8 @@ index-large-pq: dump-dir
 		--cuda
 
 # Use if for large-scale dump evaluation
-eval-dump: model-name dump-dir nq-single-data
+# eval-dump: model-name dump-dir nq-single-data
+eval-dump: model-name dump-dir nq-open-data
 	python -m densephrases.experiments.run_open \
 		--run_mode eval_inmemory \
 		--cuda \
