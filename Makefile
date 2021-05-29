@@ -213,7 +213,6 @@ index-large: dump-dir
 		--replace \
 		--num_clusters $(NUM_CLUSTERS) \
 		--fine_quant SQ4 \
-		--cuda
 
 # Parallel add for large-scale on-disk IVFSQ (start, end = file idx)
 index-add: dump-dir

@@ -44,14 +44,27 @@ total 39G
 the files are in `{START}-{END}.hdf5` format.
 
 ### Create a phrase index
-Step 1 (fails with some `malloc` thing)
+Step 1
 ```
-make index-large DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+NUM_CLUSTERS=100000
+make index-large DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
+```
+note:
+- by default this runs on GPU and OOMs. I've removed `--cuda` to do this on CPU.
+- tried 10k clusters and it works on CPU. Now trying 100k.
+
+should dump files like this:
+```
+(dph) ubuntu@ip-172-31-11-231:~/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/10000_flat_SQ4$ ls -lh
+total 18G
+-rw-rw-r-- 1 ubuntu ubuntu  18G May 29 21:10 index.faiss
+-rw-rw-r-- 1 ubuntu ubuntu 343M May 29 21:10 idx2id.hdf5
+-rw-rw-r-- 1 ubuntu ubuntu  30M May 29 20:43 trained.faiss
 ```
 
 Step 2 (fails)
 ```
-make index-add DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000 START=0 END=696
+make index-add DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS START=0 END=696
 ```
 
 error:
@@ -69,7 +82,7 @@ Error: mkl-service + Intel(R) MKL: MKL_THREADING_LAYER=INTEL is incompatible wit
 
 Step 3 (fails)
 ```
-make index-merge DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+make index-merge DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
 
 error:
@@ -94,7 +107,7 @@ make: *** [index-merge] Error 1
 
 ### Evaluate (fails)
 ```
-make eval-dump MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+make eval-dump MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
 
 error:
