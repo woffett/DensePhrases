@@ -197,7 +197,7 @@ dump-large: model-name
 		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--data_dir $(DPH_DATA_DIR)/wikidump \
-		--data_name wiki7500 \
+		--data_name $(DATA_NAME) \
 		--load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--filter_threshold 0.0 \
@@ -211,7 +211,7 @@ index-large: dump-dir
 	python -m densephrases.experiments.create_index \
 		$(DUMP_DIR) all \
 		--replace \
-		--num_clusters 50000 \
+		--num_clusters $(NUM_CLUSTERS) \
 		--fine_quant SQ4 \
 		--cuda
 
@@ -220,7 +220,7 @@ index-add: dump-dir
 	export MKL_SERVICE_FORCE_INTEL=1
 	python -m densephrases.experiments.parallel.add_to_index \
 		--dump_dir $(DUMP_DIR) \
-		--num_clusters 50000 \
+		--num_clusters $(NUM_CLUSTERS) \
 		--cuda \
 		--start $(START) \
 		--end $(END)
@@ -229,7 +229,7 @@ index-add: dump-dir
 index-merge: dump-dir
 	python -m densephrases.experiments.create_index \
 	$(DUMP_DIR) merge \
-	--num_clusters 50000 \
+	--num_clusters $(NUM_CLUSTERS) \
 	--replace \
 	--fine_quant SQ4
 

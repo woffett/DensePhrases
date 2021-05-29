@@ -14,10 +14,54 @@ Process:
 Resources:
 - Logic is in [`densePhrases.scripts.sampler.py`](densephrases/scripts/sampler.py).
 - Notebook with EDA is at [wikidump-sampler.ipynb](wikidump-sampler.ipynb)
+  
+### Download data
 - Data can be downloaded [here](https://www.dropbox.com/s/4d45t8x4dsue7vy/wiki7500.tar.gz?dl=0) or just use `wget`:
 ```
+cd $DPH_DATA_DIR/wikidump
 wget -O wiki7500.tar.gz https://www.dropbox.com/s/4d45t8x4dsue7vy/wiki7500.tar.gz?raw=1
 tar -xvf wiki7500.tar.gz
+```
+
+Copy the sampled NQ dataset:
+```
+cd ~/DensePhrases
+cp splits_7500/*.json $DPH_DATA_DIR/open-qa/nq-open/
+```
+
+### Create a phrase dump
+```
+make dump-large MODEL_NAME=dph-nqsqd-pb2 DATA_NAME=wiki7500 START=0 END=696
+```
+
+this will produce `hdf5` files in `$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/phrase`, for example:
+```
+(dph) ubuntu@ip-172-31-11-231:~/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/phrase$ ls -lt
+total 39G
+-rw-rw-r-- 1 ubuntu ubuntu 20G May 29 01:54 0-350.hdf5
+-rw-rw-r-- 1 ubuntu ubuntu 19G May 29 01:49 351-696.hdf5
+```
+the files are in `{START}-{END}.hdf5` format.
+
+### Create a phrase index
+Step 1
+```
+make index-large DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+```
+
+Step 2
+```
+make index-add DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+```
+
+Step 3
+```
+make index-merge DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=100000
+```
+
+### Evaluate
+```
+make eval-dump ...
 ```
 
 ## Original README starts here
