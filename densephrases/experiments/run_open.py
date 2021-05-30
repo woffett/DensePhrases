@@ -357,7 +357,7 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
 
     ks = sorted({1, 2, 5, 10, 15, 20}.union({args.top_k}))
     success_at_ks = {
-        f"Success @ {k}": success_at_k(answers, evidences, k)
+        f"Success @ {k}": 100 * success_at_k(answers, evidences, k)
         for k in ks
     }
     logger.info({

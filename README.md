@@ -119,14 +119,13 @@ make: *** [index-merge] Error 1
 ### Evaluate
 ```
 NUM_CLUSTERS=32000
-make eval-dump MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 make eval-od MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
 
 Takes about 10 mins and returns:
 ```
-05/29/2021 23:42:45 - INFO - __main__ -   {'exact_match_top1': 34.8, 'f1_score_top1': 44.29079365079369, 'precision_score_top1': 45.95904761904762, 'recall_score_top1': 44.833333333333314}
-05/29/2021 23:42:45 - INFO - __main__ -   {'exact_match_top10': 61.86666666666667, 'f1_score_top10': 70.1576046176046, 'precision_score_top10': 72.26888888888888, 'recall_score_top10': 70.21111111111111}
+05/30/2021 19:51:30 - INFO - __main__ -   {'exact_match_top1': 34.8, 'f1_score_top1': 44.22412698412702, 'precision_score_top1': 45.82571428571429, 'recall_score_top1': 44.788888888888856}
+05/30/2021 19:51:34 - INFO - __main__ -   {'exact_match_top10': 61.733333333333334, 'f1_score_top10': 70.02427128427126, 'precision_score_top10': 72.13555555555556, 'recall_score_top10': 70.07777777777777, 'Success @ 1': 0.47333333333333333, 'Success @ 2': 0.5773333333333334, 'Success @ 5': 0.6613333333333333, 'Success @ 10': 0.72, 'Success @ 15': 0.7413333333333333, 'Success @ 20': 0.7413333333333333}
 ```
 
 ## Original README starts here
