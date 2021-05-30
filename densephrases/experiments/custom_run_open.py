@@ -14,7 +14,7 @@ import string
 from time import time
 from tqdm import tqdm
 
-from densephrases.models import DensePhrases, MIPS, MIPSLight
+from densephrases.models import DPHEncoder, DensePhrases, MIPS, MIPSLight
 from densephrases.utils.single_utils import backward_compat
 from densephrases.utils.squad_utils import get_question_dataloader, TrueCaser
 from densephrases.utils.embed_utils import get_question_results
@@ -54,7 +54,7 @@ def load_query_encoder(device, args):
     )
 
     # Pre-trained DensePhrases
-    model = DensePhrases(
+    model = DPHEncoder(
         config=config,
         tokenizer=tokenizer,
         transformer_cls=MODEL_MAPPING[config.__class__],
@@ -572,9 +572,9 @@ def get_top_phrases(mips, questions, answers, query_encoder, tokenizer, batch_si
     )
     for q_idx in tqdm(range(0, len(questions), step)):
         outs = query2vec(questions[q_idx:q_idx+step])
-#        start = np.concatenate([out[0] for out in outs], 0)
- #       end = np.concatenate([out[1] for out in outs], 0)
-        query_vec = outs[0] #np.concatenate([start, end], 1)
+        start = np.concatenate([out[0] for out in outs], 0)
+        end = np.concatenate([out[1] for out in outs], 0)
+        query_vec = np.concatenate([start, end], 1)
 
         outs = search_fn(
             query_vec,

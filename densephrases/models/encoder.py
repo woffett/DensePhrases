@@ -12,7 +12,6 @@ from transformers import PreTrainedModel
 
 logger = logging.getLogger(__name__)
 
-
 class DensePhrases(PreTrainedModel):
     def __init__(self,
                  config,

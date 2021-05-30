@@ -10,17 +10,17 @@ def test():
     model = RobertaModel.from_pretrained('roberta-base')
     config =  model.config
 
-    test_string = "Who is Jeff Dean?"
+    test_strings = ["Who is Jeff Dean?", "What predictions does the theory of General Reletivity make?"]
     
     encoder = DPHEncoder(config, tokenizer, model)
     
-    inp = tokenizer.encode_plus(test_string, return_token_type_ids=True, return_tensors="pt")
+    inp = tokenizer.encode_plus(test_strings, return_token_type_ids=True, return_tensors="pt")
     
-    print(inp['input_ids'].size())
-
-    output = encoder.embed_phrase(inp['input_ids'], inp['attention_mask'], inp['token_type_ids'])
+    print(inp['input_ids'][0].size())
+    start_vec, end_vec = encoder.embed_phrase(inp['input_ids'], inp['attention_mask'], inp['token_type_ids'])
+    query_vec = encoder.embed_query(inp['input_ids'], inp['attention_mask'], inp['token_type_ids'])
     
-    print(output.size())
+    #print(start_vec.size())
 
 if __name__ == '__main__':
     test()

@@ -318,6 +318,7 @@ def get_question_results(question_examples, query_eval_features, question_datalo
             assert len(feature_indices.size()) > 0
             # feature_indices.unsqueeze_(0)
 
+            #query_vec = model(**inputs)
             outputs = model(**inputs)
 
         for i, feature_index in enumerate(feature_indices):
@@ -327,7 +328,6 @@ def get_question_results(question_examples, query_eval_features, question_datalo
                 to_numpy(output[i]) if type(output) != dict else {k: to_numpy(v[i]) for k, v in output.items()}
                 for output in outputs
             ]
-
             if len(output) != 2:
                 raise NotImplementedError
             else:
@@ -339,6 +339,16 @@ def get_question_results(question_examples, query_eval_features, question_datalo
                     start_vec=start_vec,
                     end_vec=end_vec,
                 )
+
+            """ 
+            result = QuestionResult(
+                    unique_id,
+                    qas_id=id2example[unique_id].qas_id,
+                    input_ids=id2feature[unique_id].input_ids_,
+                    start_vec=query_vec,
+                    end_vec=query_vec,
+            )
+            """
             yield result
 
 
