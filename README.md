@@ -14,10 +14,118 @@ Process:
 Resources:
 - Logic is in [`densePhrases.scripts.sampler.py`](densephrases/scripts/sampler.py).
 - Notebook with EDA is at [wikidump-sampler.ipynb](wikidump-sampler.ipynb)
+
+used a `g4dn.8xlarge` ec2 instance for all these experiments.
+  
+### Download data
 - Data can be downloaded [here](https://www.dropbox.com/s/4d45t8x4dsue7vy/wiki7500.tar.gz?dl=0) or just use `wget`:
 ```
+cd $DPH_DATA_DIR/wikidump
 wget -O wiki7500.tar.gz https://www.dropbox.com/s/4d45t8x4dsue7vy/wiki7500.tar.gz?raw=1
 tar -xvf wiki7500.tar.gz
+```
+
+Copy the sampled NQ dataset:
+```
+cd ~/DensePhrases
+cp splits_7500/*.json $DPH_DATA_DIR/open-qa/nq-open/
+```
+
+### Create a phrase dump
+```
+make dump-large MODEL_NAME=dph-nqsqd-pb2 DATA_NAME=wiki7500 START=0 END=696
+```
+
+this will produce `hdf5` files in `$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/phrase`, for example:
+```
+(dph) ubuntu@ip-172-31-11-231:~/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/phrase$ ls -lt
+total 39G
+-rw-rw-r-- 1 ubuntu ubuntu 20G May 29 01:54 0-350.hdf5
+-rw-rw-r-- 1 ubuntu ubuntu 19G May 29 01:49 351-696.hdf5
+```
+the files are in `{START}-{END}.hdf5` format.
+
+### Create a phrase index
+#### Step 1
+```
+NUM_CLUSTERS=32000
+make index-large DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
+```
+note: by default this runs on GPU and OOMs. I've removed `--cuda` to do this on CPU. Takes about an hour.
+
+should dump files like this:
+```
+(dph) ubuntu@ip-172-31-11-231:~/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/10000_flat_SQ4$ ls -lh
+total 18G
+-rw-rw-r-- 1 ubuntu ubuntu  18G May 29 21:10 index.faiss
+-rw-rw-r-- 1 ubuntu ubuntu 343M May 29 21:10 idx2id.hdf5
+-rw-rw-r-- 1 ubuntu ubuntu  30M May 29 20:43 trained.faiss
+```
+
+using 100k:
+```
+WARNING clustering 1743371 points to 100000 centroids: please provide at least 3900000 training points
+```
+
+what is the right number of clusters to use? Omar suggested 2 * sqrt(N) where `N` is the number of embeddings.
+
+TODO for amir: in this step are we indexing phrases or paragraphs? i.e. what is `N`? 
+
+#### Step 2
+fails! seems to be safe to skip though
+```
+make index-add DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS START=0 END=696
+```
+
+error:
+```
+adding with offset:
+0: 0-350.hdf5
+100000000: 351-696.hdf5
+['python', '-mdensephrases.experiments.create_index', '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/', 'add', '--fine_quant', 'SQ4', '--dump_paths', '0-350.hdf5', '--offset', '0', '--num_clusters', '100000', '--cuda']
+Error: mkl-service + Intel(R) MKL: MKL_THREADING_LAYER=INTEL is incompatible with libgomp.so.1 library.
+	Try to import numpy first or set the threading layer accordingly. Set MKL_SERVICE_FORCE_INTEL to force it.
+['python', '-mdensephrases.experiments.create_index', '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/', 'add', '--fine_quant', 'SQ4', '--dump_paths', '351-696.hdf5', '--offset', '100000000', '--num_clusters', '100000', '--cuda']
+Error: mkl-service + Intel(R) MKL: MKL_THREADING_LAYER=INTEL is incompatible with libgomp.so.1 library.
+	Try to import numpy first or set the threading layer accordingly. Set MKL_SERVICE_FORCE_INTEL to force it.
+```
+
+#### Step 3
+fails! seems to be safe to skip though
+```
+make index-merge DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
+```
+
+error:
+```
+Traceback (most recent call last):
+  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 376, in <module>
+    main()
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 372, in main
+    run_index(args)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 359, in run_index
+    merge_indexes(args.subindex_dir, args.trained_index_path, args.index_path, args.idx2id_path, args.inv_path)
+  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 260, in merge_indexes
+    names = os.listdir(subindex_dir)
+FileNotFoundError: [Errno 2] No such file or directory: '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/100000_flat_SQ4/index'
+Makefile:230: recipe for target 'index-merge' failed
+make: *** [index-merge] Error 1
+```
+
+### Evaluate
+```
+NUM_CLUSTERS=32000
+make eval-od MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
+```
+
+Takes about 10 mins and returns:
+```
+05/30/2021 19:51:30 - INFO - __main__ -   {'exact_match_top1': 34.8, 'f1_score_top1': 44.22412698412702, 'precision_score_top1': 45.82571428571429, 'recall_score_top1': 44.788888888888856}
+05/30/2021 19:51:34 - INFO - __main__ -   {'exact_match_top10': 61.733333333333334, 'f1_score_top10': 70.02427128427126, 'precision_score_top10': 72.13555555555556, 'recall_score_top10': 70.07777777777777, 'Success @ 1': 0.47333333333333333, 'Success @ 2': 0.5773333333333334, 'Success @ 5': 0.6613333333333333, 'Success @ 10': 0.72, 'Success @ 15': 0.7413333333333333, 'Success @ 20': 0.7413333333333333}
 ```
 
 ## Original README starts here
