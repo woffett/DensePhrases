@@ -217,6 +217,21 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
     wandb.init(project="DensePhrases (open)", mode="online" if args.wandb else "disabled")
     wandb.config.update(args)
 
+    # TODO: remove all the pickling after debugging
+    import pickle as pkl
+
+    def pickle_it(obj, path):
+        pkl.dump(obj, open(f"{path}.pkl", 'wb'))
+
+    pickle_it(predictions, "predictions")
+    pickle_it(qids, "qids")
+    pickle_it(questions, "questions")
+    pickle_it(answers, "answers")
+    pickle_it(evidences, "evidences")
+    pickle_it(scores, "scores")
+    pickle_it(titles, "titles")
+    pickle_it(q_tokens, "q_tokens")
+
     # Filter if there's candidate
     if args.candidate_path is not None:
         candidates = set()
