@@ -11,6 +11,8 @@ import math
 import copy
 import wandb
 import string
+import regex
+import unicodedata
 
 from time import time
 from tqdm import tqdm
@@ -19,8 +21,16 @@ from densephrases.models import DensePhrases, MIPS, MIPSLight
 from densephrases.utils.single_utils import backward_compat
 from densephrases.utils.squad_utils import get_question_dataloader, TrueCaser
 from densephrases.utils.embed_utils import get_question_results
-from densephrases.utils.eval_utils import normalize_answer, f1_score, exact_match_score, drqa_exact_match_score, \
-        drqa_regex_match_score, drqa_metric_max_over_ground_truths, drqa_normalize
+from densephrases.utils.eval_utils import (
+    normalize_answer,
+    f1_score,
+    exact_match_score,
+    drqa_exact_match_score,
+    drqa_regex_match_score,
+    drqa_metric_max_over_ground_truths,
+    drqa_normalize,
+    success_at_k,
+)
 from densephrases.utils.kilt.eval import evaluate as kilt_evaluate
 from densephrases.utils.kilt.kilt_utils import store_data as kilt_store_data
 
@@ -345,11 +355,17 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
         'recall_score_top1': pct(recall_score_top1),
     })
 
+    ks = sorted({1, 2, 5, 10, 15, 20}.union({args.top_k}))
+    success_at_ks = {
+        f"Success @ {k}": 100 * success_at_k(answers, evidences, k)
+        for k in ks
+    }
     logger.info({
         f'exact_match_top{args.top_k}': pct(exact_match_topk),
         f'f1_score_top{args.top_k}': pct(f1_score_topk),
         f'precision_score_top{args.top_k}': pct(precision_score_topk),
         f'recall_score_top{args.top_k}': pct(recall_score_topk),
+        **success_at_ks,
     })
     wandb.log(
         {"Top1 EM": exact_match_top1, "Top1 F1": f1_score_top1,

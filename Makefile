@@ -313,9 +313,9 @@ eval-od: dump-dir model-name nq-open-data
 		--cuda \
 		--eval_batch_size 12 \
 		--dump_dir $(DUMP_DIR) \
-		--index_dir start/1048576_flat_PQ96_8 \
+		--index_dir start/$(NUM_CLUSTERS)_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
-		--test_path $(DPH_DATA_DIR)/$(TEST_DATA) \
+		--test_path $(DPH_DATA_DIR)/$(DEV_DATA) \
 		$(OPTIONS)
 
 train-query: dump-dir model-name nq-open-data
