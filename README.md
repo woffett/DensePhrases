@@ -118,7 +118,9 @@ make: *** [index-merge] Error 1
 
 ### Evaluate
 ```
+NUM_CLUSTERS=32000
 make eval-dump MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
+make eval-od MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
 
 Takes about 10 mins and returns:
