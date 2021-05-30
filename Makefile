@@ -242,16 +242,14 @@ index-large-pq: dump-dir
 		--cuda
 
 # Use if for large-scale dump evaluation
-# eval-dump: model-name dump-dir nq-single-data
-# note: `test_path` used to be `SOD_DATA` but i've changed it to `DEV_DATA`
-eval-dump: model-name dump-dir nq-open-data
+eval-dump: model-name dump-dir nq-single-data
 	python -m densephrases.experiments.run_open \
 		--run_mode eval_inmemory \
 		--cuda \
 		--dump_dir $(DUMP_DIR) \
 		--index_dir start/$(NUM_CLUSTERS)_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
-		--test_path $(DPH_DATA_DIR)/$(DEV_DATA) \
+		--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
 		$(OPTIONS)
 
 # Compressed metadata to load it on RAM (only use for PQ)
