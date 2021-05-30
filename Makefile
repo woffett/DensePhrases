@@ -197,7 +197,7 @@ dump-large: model-name
 		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--data_dir $(DPH_DATA_DIR)/wikidump \
-		--data_name dev_wiki \
+		--data_name $(DATA_NAME) \
 		--load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--filter_threshold 0.0 \
@@ -211,16 +211,15 @@ index-large: dump-dir
 	python -m densephrases.experiments.create_index \
 		$(DUMP_DIR) all \
 		--replace \
-		--num_clusters 16384 \
+		--num_clusters $(NUM_CLUSTERS) \
 		--fine_quant SQ4 \
-		--cuda
 
 # Parallel add for large-scale on-disk IVFSQ (start, end = file idx)
 index-add: dump-dir
 	export MKL_SERVICE_FORCE_INTEL=1
 	python -m densephrases.experiments.parallel.add_to_index \
 		--dump_dir $(DUMP_DIR) \
-		--num_clusters 1048576 \
+		--num_clusters $(NUM_CLUSTERS) \
 		--cuda \
 		--start $(START) \
 		--end $(END)
@@ -229,7 +228,7 @@ index-add: dump-dir
 index-merge: dump-dir
 	python -m densephrases.experiments.create_index \
 	$(DUMP_DIR) merge \
-	--num_clusters 1048576 \
+	--num_clusters $(NUM_CLUSTERS) \
 	--replace \
 	--fine_quant SQ4
 
@@ -248,7 +247,7 @@ eval-dump: model-name dump-dir nq-single-data
 		--run_mode eval_inmemory \
 		--cuda \
 		--dump_dir $(DUMP_DIR) \
-		--index_dir start/16384_flat_SQ4 \
+		--index_dir start/$(NUM_CLUSTERS)_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
 		$(OPTIONS)
@@ -267,9 +266,9 @@ limit-threads:
 
 # Dataset paths for open-domain QA and slot filling (with options)
 nq-open-data:
-	$(eval TRAIN_DATA=open-qa/nq-open/train_preprocessed.json)
-	$(eval DEV_DATA=open-qa/nq-open/dev_preprocessed.json)
-	$(eval TEST_DATA=open-qa/nq-open/test_preprocessed.json)
+	$(eval TRAIN_DATA=open-qa/nq-open/train.json)
+	$(eval DEV_DATA=open-qa/nq-open/dev.json)
+	$(eval TEST_DATA=open-qa/nq-open/test.json)
 	$(eval OPTIONS=--truecase)
 wq-open-data:
 	$(eval TRAIN_DATA=open-qa/webq/WebQuestions-train-nodev_preprocessed.json)
@@ -312,9 +311,9 @@ eval-od: dump-dir model-name nq-open-data
 		--cuda \
 		--eval_batch_size 12 \
 		--dump_dir $(DUMP_DIR) \
-		--index_dir start/1048576_flat_PQ96_8 \
+		--index_dir start/$(NUM_CLUSTERS)_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
-		--test_path $(DPH_DATA_DIR)/$(TEST_DATA) \
+		--test_path $(DPH_DATA_DIR)/$(DEV_DATA) \
 		$(OPTIONS)
 
 train-query: dump-dir model-name nq-open-data

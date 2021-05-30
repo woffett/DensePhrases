@@ -1,3 +1,4 @@
+import functools
 import json
 import argparse
 import torch
@@ -10,6 +11,8 @@ import math
 import copy
 import wandb
 import string
+import regex
+import unicodedata
 
 from time import time
 from tqdm import tqdm
@@ -18,8 +21,16 @@ from densephrases.models import DensePhrases, MIPS, MIPSLight
 from densephrases.utils.single_utils import backward_compat
 from densephrases.utils.squad_utils import get_question_dataloader, TrueCaser
 from densephrases.utils.embed_utils import get_question_results
-from densephrases.utils.eval_utils import normalize_answer, f1_score, exact_match_score, drqa_exact_match_score, \
-        drqa_regex_match_score, drqa_metric_max_over_ground_truths, drqa_normalize
+from densephrases.utils.eval_utils import (
+    normalize_answer,
+    f1_score,
+    exact_match_score,
+    drqa_exact_match_score,
+    drqa_regex_match_score,
+    drqa_metric_max_over_ground_truths,
+    drqa_normalize,
+    success_at_k,
+)
 from densephrases.utils.kilt.eval import evaluate as kilt_evaluate
 from densephrases.utils.kilt.kilt_utils import store_data as kilt_store_data
 
@@ -216,6 +227,21 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
     wandb.init(project="DensePhrases (open)", mode="online" if args.wandb else "disabled")
     wandb.config.update(args)
 
+    # TODO: remove all the pickling after debugging
+    import pickle as pkl
+
+    def pickle_it(obj, path):
+        pkl.dump(obj, open(f"{path}.pkl", 'wb'))
+
+    pickle_it(predictions, "predictions")
+    pickle_it(qids, "qids")
+    pickle_it(questions, "questions")
+    pickle_it(answers, "answers")
+    pickle_it(evidences, "evidences")
+    pickle_it(scores, "scores")
+    pickle_it(titles, "titles")
+    pickle_it(q_tokens, "q_tokens")
+
     # Filter if there's candidate
     if args.candidate_path is not None:
         candidates = set()
@@ -252,6 +278,10 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
     exact_match_top1 = 0
     f1_score_topk = 0
     f1_score_top1 = 0
+    precision_score_topk = 0
+    precision_score_top1 = 0
+    recall_score_topk = 0
+    recall_score_top1 = 0
     pred_out = {}
     for i in range(len(predictions)):
         # For debugging
@@ -271,33 +301,72 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
 
         f1_topk = 0
         f1_top1 = 0
+        precision_topk = 0
+        precision_top1 = 0
+        recall_topk = 0
+        recall_top1 = 0
         if not args.regex:
-            match_fn = lambda x, y: f1_score(x, y)[0]
-            f1_topk = max([drqa_metric_max_over_ground_truths(
-                match_fn, prediction, answers[i]
-            ) for prediction in predictions[i][:args.top_k]])
-            f1_top1 = drqa_metric_max_over_ground_truths(
-                match_fn, top1_preds[i], answers[i]
-            )
+            def f1(x, y): return f1_score(x, y)[0]
+            def precision(x, y): return f1_score(x, y)[1]
+            def recall(x, y): return f1_score(x, y)[2]
+
+            def topk(fn):
+                return max(
+                    [drqa_metric_max_over_ground_truths(fn, p, answers[i])
+                     for p in predictions[i][:args.top_k]]
+                )
+
+            def top1(fn): return drqa_metric_max_over_ground_truths(fn, top1_preds[i], answers[i])
+
+            # f1
+            f1_topk = topk(f1)
+            f1_top1 = top1(f1)
             f1_score_topk += f1_topk
             f1_score_top1 += f1_top1
+            # precision
+            precision_topk = topk(precision)
+            precision_top1 = top1(precision)
+            precision_score_topk += precision_topk
+            precision_score_top1 += precision_top1
+            # recall
+            recall_topk = topk(recall)
+            recall_top1 = top1(recall)
+            recall_score_topk += recall_topk
+            recall_score_top1 += recall_top1
 
         pred_out[qids[i]] = {
-                'question': questions[i],
-                'answer': answers[i], 'prediction': predictions[i], 'score': scores[i], 'title': titles[i],
-                'evidence': evidences[i] if evidences is not None else '',
-                'em_top1': bool(em_top1), f'em_top{args.top_k}': bool(em_topk),
-                'f1_top1': f1_top1, f'f1_top{args.top_k}': f1_topk,
-                'q_tokens': q_tokens[i] if q_tokens is not None else ['']
+            'question': questions[i],
+            'answer': answers[i], 'prediction': predictions[i], 'score': scores[i], 'title': titles[i],
+            'evidence': evidences[i] if evidences is not None else '',
+            'em_top1': bool(em_top1), f'em_top{args.top_k}': bool(em_topk),
+            'f1_top1': f1_top1, f'f1_top{args.top_k}': f1_topk,
+            'precision_top1': precision_top1, f'precision_top{args.top_k}': precision_topk,
+            'recall_top1': recall_top1, f'recall_top{args.top_k}': recall_topk,
+            'q_tokens': q_tokens[i] if q_tokens is not None else ['']
         }
 
+    def pct(val: float) -> float: return 100.0 * val / total
+
     total = len(predictions)
-    exact_match_top1 = 100.0 * exact_match_top1 / total
-    f1_score_top1 = 100.0 * f1_score_top1 / total
-    logger.info({'exact_match_top1': exact_match_top1, 'f1_score_top1': f1_score_top1})
-    exact_match_topk = 100.0 * exact_match_topk / total
-    f1_score_topk = 100.0 * f1_score_topk / total
-    logger.info({f'exact_match_top{args.top_k}': exact_match_topk, f'f1_score_top{args.top_k}': f1_score_topk})
+    logger.info({
+        'exact_match_top1': pct(exact_match_top1),
+        'f1_score_top1': pct(f1_score_top1),
+        'precision_score_top1': pct(precision_score_top1),
+        'recall_score_top1': pct(recall_score_top1),
+    })
+
+    ks = sorted({1, 2, 5, 10, 15, 20}.union({args.top_k}))
+    success_at_ks = {
+        f"Success @ {k}": 100 * success_at_k(answers, evidences, k)
+        for k in ks
+    }
+    logger.info({
+        f'exact_match_top{args.top_k}': pct(exact_match_topk),
+        f'f1_score_top{args.top_k}': pct(f1_score_topk),
+        f'precision_score_top{args.top_k}': pct(precision_score_topk),
+        f'recall_score_top{args.top_k}': pct(recall_score_topk),
+        **success_at_ks,
+    })
     wandb.log(
         {"Top1 EM": exact_match_top1, "Top1 F1": f1_score_top1,
          "Topk EM": exact_match_topk, "Topk F1": f1_score_topk}
