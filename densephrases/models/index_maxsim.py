@@ -315,10 +315,17 @@ class MaxSimMIPS(object):
                 float(groups_all[default_doc]['offset']), float(groups_all[default_doc]['scale']), each_end
             )
 
+        maxsim_scores1 = np.zeros((query.shape[0], max_answer_length))
         with torch.no_grad():
             end = torch.FloatTensor(end).to(self.device)
-            new_end_scores = torch.einsum('bsd,bdm->bsm', query, end.permute(0,2,1)).sum(1).cpu().numpy() # [B, max_answer_len]
-        scores1 = np.expand_dims(start_scores, 1) + new_end_scores + end_mask  # [Q, L]
+            # compute max-sim
+            dot_prod1 = torch.einsum('bsd,bdm->bsm', query, end.permute(0,2,1))
+            # iterate over possible answer lengths
+            for i in range(max_answer_length):
+                cur_dot_prod = dot_prod1[:, :, :i+1]
+                cur_dot_prod_max, _ = torch.max(cur_dot_prod, -1)
+                maxsim_scores1[:, i] = cur_dot_prod_max.sum(-1).cpu().numpy()
+        scores1 = maxsim_scores1 + end_mask  # [Q, L]
         pred_end_idxs = np.stack([each[idx] for each, idx in zip(new_end_idxs, np.argmax(scores1, 1))], 0)  # [Q]
         pred_end_vecs = np.stack([each[idx] for each, idx in zip(end.cpu().numpy(), np.argmax(scores1, 1))], 0)
         logger.debug(f'2) {time()-start_time:.3f}s: find end')
@@ -338,10 +345,16 @@ class MaxSimMIPS(object):
                 float(groups_all[default_doc]['offset']), float(groups_all[default_doc]['scale']), each_start
             )
 
+        maxsim_scores2 = np.zeros((query.shape[0], max_answer_length))
         with torch.no_grad():
             start = torch.FloatTensor(start).to(self.device)
-            new_start_scores = torch.einsum('bsd,bdm->bsm', query, end.permute(0,2,1)).sum(1).cpu().numpy() # [B, max_answer_len]
-        scores2 = new_start_scores + np.expand_dims(end_scores, 1) + start_mask  # [Q, L]
+            dot_prod2 = torch.einsum('bsd,bdm->bsm', query, start.permute(0,2,1))
+            # iterate over possible answer lengths
+            for i in range(max_answer_length):
+                cur_dot_prod = dot_prod2[:, :, :i+1]
+                cur_dot_prod_max, _ = torch.max(cur_dot_prod, -1)
+                maxsim_scores2[:, i] = cur_dot_prod_max.sum(-1).cpu().numpy()
+        scores2 = maxsim_scores2 + start_mask  # [Q, L]
         pred_start_idxs = np.stack([each[idx] for each, idx in zip(new_start_idxs, np.argmax(scores2, 1))], 0)  # [Q]
         pred_start_vecs = np.stack([each[idx] for each, idx in zip(start.cpu().numpy(), np.argmax(scores2, 1))], 0)
         logger.debug(f'3) {time()-start_time:.3f}s: find start')
