@@ -243,6 +243,7 @@ index-large-pq: dump-dir
 
 # Use if for large-scale dump evaluation
 # eval-dump: model-name dump-dir nq-single-data
+# note: `test_path` used to be `SOD_DATA` but i've changed it to `DEV_DATA`
 eval-dump: model-name dump-dir nq-open-data
 	python -m densephrases.experiments.run_open \
 		--run_mode eval_inmemory \
@@ -250,7 +251,7 @@ eval-dump: model-name dump-dir nq-open-data
 		--dump_dir $(DUMP_DIR) \
 		--index_dir start/$(NUM_CLUSTERS)_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
-		--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
+		--test_path $(DPH_DATA_DIR)/$(DEV_DATA) \
 		$(OPTIONS)
 
 # Compressed metadata to load it on RAM (only use for PQ)
@@ -270,7 +271,6 @@ nq-open-data:
 	$(eval TRAIN_DATA=open-qa/nq-open/train.json)
 	$(eval DEV_DATA=open-qa/nq-open/dev.json)
 	$(eval TEST_DATA=open-qa/nq-open/test.json)
-	$(eval SOD_DATA=open-qa/nq-open/dev.json)
 	$(eval OPTIONS=--truecase)
 wq-open-data:
 	$(eval TRAIN_DATA=open-qa/webq/WebQuestions-train-nodev_preprocessed.json)
