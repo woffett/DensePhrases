@@ -14,7 +14,7 @@ import string
 from time import time
 from tqdm import tqdm
 
-from encoder import DensePhrases
+from .encoder import DensePhrases
 
 class DPHEncoder(DensePhrases):
     def __init__(self, *args, **kwargs):
@@ -44,8 +44,9 @@ class DPHEncoder(DensePhrases):
             attention_mask=attention_mask_,
             token_type_ids=token_type_ids_,
             )
-        
-        return output[0]
+        query_vec = output[0]
+
+        return query_vec, query_vec
 
     def forward(
         self,
@@ -72,10 +73,10 @@ class DPHEncoder(DensePhrases):
         # Query-side
         if input_ids_ is not None:
             assert len(input_ids_.size()) == 2
-            query_embed = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
+            query_vecs = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
 
             if return_query:
-                return query_embed
+                return query_vecs
 
         # Get dense logits
         start_logits = start.matmul(query_start.transpose(1, 2)).squeeze(-1)
@@ -224,7 +225,7 @@ class DPHEncoder(DensePhrases):
     def train_query(
             self,
             input_ids_=None, attention_mask_=None, token_type_ids_=None,
-            start_vecs=None, end_vecs=None,
+            start_vecs=None, end_vecs=None, phrase_vecs=None,
             targets=None,
         ):
         
@@ -234,25 +235,20 @@ class DPHEncoder(DensePhrases):
                 return None, None
 
         # Compute query embedding
-        query_start, query_end = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
+        query_vec, _ = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
+        
+        query_start = query_vec[:, :1, :]
+        query_end = query_vec[:, -1:, :]
 
         # Start/end dense logits
         start_logits = query_start.matmul(start_vecs.transpose(1, 2)).squeeze(1)
         end_logits = query_end.matmul(end_vecs.transpose(1, 2)).squeeze(1)
-        logits = start_logits + end_logits
+        #logits = start_logits + end_logits
 
-        """
-        query_vec = self.embed_query(input_ids_, attention_mask_, token_typed_ids_)
-        batch_size = query_vec.size(0)
-
-        #This should be vectorized
-        for i in range(batch_size):
-            cur_query_vec = query_vec[i]
-            seq_length = cur_query_vec.size(0)
-            for j in seq_length:
-                logits += cur_query_vec[j].matmul(start_vecs.tranpose(1,2)).squeeze(1)
-                logits += cur_query_vec[j].matmul(end_vecs.tranpose(1,2)).squeeze(1)
-        """
+        
+        logits = torch.einsum('bsd,bcdt->bcst', query_vec, phrase_vecs.permute(0, 1, 3, 2))
+        logits = torch.max(logits, dim = -1)[0]
+        logits = torch.sum(logits, dim = -1)
 
         # MML over targets
         MIN_PROB = 1e-7

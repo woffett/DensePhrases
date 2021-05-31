@@ -547,11 +547,13 @@ def train_query_encoder(args, mips=None):
             train_dataloader, _, _ = get_question_dataloader(
                 questions, tokenizer, args.max_query_length, batch_size=args.per_gpu_train_batch_size
             )
-            svs, evs, tgts = get_phrase_vecs(mips, questions, answers, outs, args)
+            svs, evs, pvs, tgts = get_phrase_vecs(mips, questions, answers, outs, args)
 
             target_encoder.train()
             svs_t = torch.Tensor(svs).to(device)
             evs_t = torch.Tensor(evs).to(device)
+            pvs_t = torch.Tensor(pvs).to(device)
+
             tgts_t = [torch.Tensor([tgt_ for tgt_ in tgt if tgt_ is not None]).to(device) for tgt in tgts]
 
             # Train query encoder
@@ -562,6 +564,7 @@ def train_query_encoder(args, mips=None):
                     input_ids_=batch[0], attention_mask_=batch[1], token_type_ids_=batch[2],
                     start_vecs=svs_t,
                     end_vecs=evs_t,
+                    phrase_vecs=pvs_t,
                     targets=tgts_t
                 )
 
@@ -659,9 +662,10 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
 
     # Get phrase and vectors
     phrase_idxs = [[(out_['doc_idx'], out_['start_idx'], out_['end_idx'], out_['answer'],
-        out_['start_vec'], out_['end_vec']) for out_ in out]
+        out_['start_vec'], out_['end_vec'], out_['phrase_vecs']) for out_ in out]
         for out in outs
     ]
+    
     for b_idx, phrase_idx in enumerate(phrase_idxs):
         while len(phrase_idxs[b_idx]) < args.top_k * 2: # two separate top-k from start/end
             phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)), np.zeros((768))))
@@ -673,6 +677,7 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
     phrases = [phrase_idx_[3] for phrase_idx_ in flat_phrase_idxs]
     start_vecs = [phrase_idx_[4] for phrase_idx_ in flat_phrase_idxs]
     end_vecs = [phrase_idx_[5] for phrase_idx_ in flat_phrase_idxs]
+    phrase_vecs = [phrase_idx_[6] for phrase_idx_ in flat_phrase_idxs]
 
     start_vecs = np.stack(
         # [mips.dequant(mips.offset, mips.scale, start_vec) # Use this for IVFSQ4
@@ -685,6 +690,8 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
         [end_vec
          for end_vec, end_idx in zip(end_vecs, end_idxs)]
     )
+
+    phrase_vecs = np.stack(phrase_vecs)
 
     zero_mask = np.array([[1] if doc_idx >= 0 else [0] for doc_idx in doc_idxs])
     start_vecs = start_vecs * zero_mask
@@ -700,7 +707,9 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
     batch_size = len(answers)
     start_vecs = np.reshape(start_vecs, (batch_size, args.top_k*2, -1))
     end_vecs = np.reshape(end_vecs, (batch_size, args.top_k*2, -1))
-    return start_vecs, end_vecs, targets
+    phrase_vecs = np.reshape(phrase_vecs, (batch_size, args.top_k*2, args.max_answer_length, -1))
+
+    return start_vecs, end_vecs, phrase_vecs, targets
 
 
 if __name__ == '__main__':
