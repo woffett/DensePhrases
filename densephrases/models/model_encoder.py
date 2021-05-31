@@ -13,6 +13,8 @@ import string
 
 from time import time
 from tqdm import tqdm
+from torch.nn import CrossEntropyLoss
+from torch.nn.functional import binary_cross_entropy_with_logits, embedding, one_hot, softmax, log_softmax, dropout
 
 from .encoder import DensePhrases
 

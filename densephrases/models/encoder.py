@@ -304,9 +304,12 @@ class DensePhrases(PreTrainedModel):
                 return None, None
 
         # Compute query embedding
+        # batch_size x emb_dim
         query_start, query_end = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
 
         # Start/end dense logits
+        # start,end_vecs : batch_size x (top_k * 2) x emb_dim
+        # start,end_logits : batch_size x (top_k * 2)
         start_logits = query_start.matmul(start_vecs.transpose(1, 2)).squeeze(1)
         end_logits = query_end.matmul(end_vecs.transpose(1, 2)).squeeze(1)
         logits = start_logits + end_logits

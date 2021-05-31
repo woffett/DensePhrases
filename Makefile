@@ -309,7 +309,7 @@ zsre-open-data: kilt-options
 benchmark-data:
 	$(eval TEST_DATA=densephrases/scripts/benchmark/data/nq_1000_dev_denspi.json)
 
-eval-od: dump-dir model-name nq-open-data
+eval-od: dump-dir model-name nq-wiki7500-data
 	python -m densephrases.experiments.run_open \
 		--run_mode eval_inmemory \
 		--model_type bert \
@@ -322,7 +322,21 @@ eval-od: dump-dir model-name nq-open-data
 		--test_path $(DPH_DATA_DIR)/$(DEV_DATA) \
 		$(OPTIONS)
 
-train-query: dump-dir model-name nq-open-data
+eval-maxsim: dump-dir model-name nq-wiki7500-data
+	python -m densephrases.experiments.run_open \
+		--run_mode eval_inmemory \
+		--model_type bert \
+		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--cuda \
+		--eval_batch_size 12 \
+		--dump_dir $(DUMP_DIR) \
+		--index_dir start/$(NUM_CLUSTERS)_flat_SQ4 \
+		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
+		--test_path $(DPH_DATA_DIR)/$(DEV_DATA) \
+		--maxsim \
+		$(OPTIONS)
+
+train-query: dump-dir model-name nq-wiki7500-data
 	python -m densephrases.experiments.run_open \
 		--run_mode train_query \
 		--model_type bert \
