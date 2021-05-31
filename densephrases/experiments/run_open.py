@@ -17,7 +17,7 @@ import unicodedata
 from time import time
 from tqdm import tqdm
 
-from densephrases.models import DensePhrases, MIPS, MIPSLight
+from densephrases.models import DensePhrases, MaxSimEncoder, MIPS, MIPSLight
 from densephrases.utils.single_utils import backward_compat
 from densephrases.utils.squad_utils import get_question_dataloader, TrueCaser
 from densephrases.utils.embed_utils import get_question_results
@@ -65,7 +65,8 @@ def load_query_encoder(device, args):
     )
 
     # Pre-trained DensePhrases
-    model = DensePhrases(
+    model_fn = DensePhrases if not args.maxsim else MaxSimEncoder
+    model = model_fn(
         config=config,
         tokenizer=tokenizer,
         transformer_cls=MODEL_MAPPING[config.__class__],
@@ -119,6 +120,7 @@ def load_phrase_index(args, load_light=False):
         index_path=index_path,
         idx2id_path=idx2id_path,
         cuda=args.cuda,
+        maxsim=args.maxsim,
         logging_level=logging.DEBUG if args.debug else logging.INFO
     )
     return mips
@@ -133,9 +135,12 @@ def embed_all_query(questions, args, query_encoder, tokenizer, batch_size=48):
     for q_idx in tqdm(range(0, len(questions), batch_size)):
         outs = query2vec(questions[q_idx:q_idx+batch_size])
         all_outs += outs
-    start = np.concatenate([out[0] for out in all_outs], 0)
-    end = np.concatenate([out[1] for out in all_outs], 0)
-    query_vec = np.concatenate([start, end], 1)
+    if args.maxsim:
+        query_vec = np.concatenate([np.expand_dims(out[0], 0) for out in all_outs], 0)
+    else:
+        start = np.concatenate([out[0] for out in all_outs], 0)
+        end = np.concatenate([out[1] for out in all_outs], 0)
+        query_vec = np.concatenate([start, end], 1)
     logger.info(f'Query reps: {query_vec.shape}')
     return query_vec
 
@@ -644,9 +649,12 @@ def get_top_phrases(mips, questions, answers, query_encoder, tokenizer, batch_si
     )
     for q_idx in tqdm(range(0, len(questions), step)):
         outs = query2vec(questions[q_idx:q_idx+step])
-#        start = np.concatenate([out[0] for out in outs], 0)
- #       end = np.concatenate([out[1] for out in outs], 0)
-        query_vec = outs[0] #np.concatenate([start, end], 1)
+        start = np.concatenate([out[0] for out in outs], 0)
+        end = np.concatenate([out[1] for out in outs], 0)
+        if args.maxsim:
+            query_vec = np.concatenate([np.expand_dims(out[0], 0) for out in outs], 0)
+        else:
+            query_vec = np.concatenate([start, end], 1)
 
         outs = search_fn(
             query_vec,
@@ -668,7 +676,9 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
     
     for b_idx, phrase_idx in enumerate(phrase_idxs):
         while len(phrase_idxs[b_idx]) < args.top_k * 2: # two separate top-k from start/end
-            phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)), np.zeros((768))))
+            phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)),
+                                       np.zeros((768)),
+                                       np.zeros((args.max_answer_length, 768))))
         phrase_idxs[b_idx] = phrase_idxs[b_idx][:args.top_k*2]
     flat_phrase_idxs = [phrase for phrase_idx in phrase_idxs for phrase in phrase_idx]
     doc_idxs = [int(phrase_idx_[0]) for phrase_idx_ in flat_phrase_idxs]
@@ -772,6 +782,7 @@ if __name__ == '__main__':
     # Run mode
     parser.add_argument('--run_mode', default='train_query')
     parser.add_argument('--cuda', default=False, action='store_true')
+    parser.add_argument('--maxsim', default=False, action='store_true')
     parser.add_argument('--draft', default=False, action='store_true')
     parser.add_argument('--debug', default=False, action='store_true')
     parser.add_argument('--wandb', default=False, action='store_true')

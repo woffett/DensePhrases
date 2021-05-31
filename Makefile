@@ -23,7 +23,7 @@ nqsqd-single-data:
 	$(eval DEV_DATA=nq/dev_wiki3.json)
 	$(eval SOD_DATA=open-qa/nq-open/dev_wiki3_open.json)
 	$(eval OPTIONS=--truecase)
-	
+
 # Choose hyperparameter
 pbn-param:
 	$(eval PBN_OPTIONS=--pbn_size 2 --pbn_tolerance 0)
@@ -265,6 +265,12 @@ limit-threads:
 	$(eval OMP_NUM_THREADS=5)
 
 # Dataset paths for open-domain QA and slot filling (with options)
+nq-wiki7500-data:
+	$(eval DPH_DATA_DIR=/home/ubuntu/DensePhrases)
+	$(eval TRAIN_DATA=splits_7500/train.json)
+	$(eval DEV_DATA=splits_7500/dev.json)
+	$(eval TEST_DATA=splits_7500/test.json)
+	$(eval OPTIONS=--truecase)
 nq-open-data:
 	$(eval TRAIN_DATA=open-qa/nq-open/train.json)
 	$(eval DEV_DATA=open-qa/nq-open/dev.json)
@@ -335,6 +341,28 @@ train-query: dump-dir model-name nq-open-data
 		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--top_k 100 \
 		--cuda \
+		$(OPTIONS)
+
+train-maxsim: dump-dir model-name nq-wiki7500-data
+	python -m densephrases.experiments.run_open \
+		--run_mode train_query \
+		--model_type bert \
+		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--cache_dir $(DPH_CACHE_DIR) \
+		--train_path $(DPH_DATA_DIR)/$(TRAIN_DATA) \
+		--dev_path $(DPH_DATA_DIR)/$(DEV_DATA) \
+		--test_path $(DPH_DATA_DIR)/$(TEST_DATA) \
+		--per_gpu_train_batch_size 12 \
+		--eval_batch_size 12 \
+		--learning_rate 3e-5 \
+		--num_train_epochs 5 \
+		--dump_dir $(DUMP_DIR) \
+		--index_dir start/32000_flat_SQ4 \
+		--query_encoder_path $(DPH_SAVE_DIR)/dph-nqsqd-pb2 \
+		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
+		--top_k 100 \
+		--cuda \
+		--maxsim \
 		$(OPTIONS)
 
 # 		--index_dir start/1048576_flat_PQ96_8 \
@@ -501,7 +529,7 @@ compare-db: data-config
 	python densephrases/scripts/compare_db.py \
 		--db1 $(DPH_DATA_DIR)/denspi/docs.db \
 		--db2 $(WIKI_DIR)/docs_20181220.db
-		
+
 sample-nq-reader-doc-wiki-train: data-config
 	python densephrases/scripts/sample_nq_reader_doc_wiki.py \
 		--sampling_ratio 0.15 \

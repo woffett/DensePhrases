@@ -313,7 +313,7 @@ class MIPS(object):
         pred_end_idxs = np.stack([each[idx] for each, idx in zip(new_end_idxs, np.argmax(scores1, 1))], 0)  # [Q]
         end_vec_mask = np.tile(
             np.expand_dims((np.array(new_end_idxs) >= 0) * (np.array(new_end_idxs) <= np.expand_dims(pred_end_idxs, 1)), -1), # [Q, L, 1]
-            [1, 1, query.shape[-1]]
+            [1, 1, default_vec.shape[-1]]
         )
         pred_end_vecs = np.stack([each[idx] for each, idx in zip(end.cpu().numpy(), np.argmax(scores1, 1))], 0)
         logger.debug(f'2) {time()-start_time:.3f}s: find end')
@@ -350,7 +350,7 @@ class MIPS(object):
         pred_start_idxs = np.stack([each[idx] for each, idx in zip(new_start_idxs, np.argmax(scores2, 1))], 0)  # [Q]
         start_vec_mask = np.tile(
             np.expand_dims((np.array(new_start_idxs) >= 0) * (np.array(new_start_idxs) >= np.expand_dims(pred_start_idxs, 1)), -1), # [Q, L, 1]
-            [1, 1, query.shape[-1]]
+            [1, 1, default_vec.shape[-1]]
         )
         pred_start_vecs = np.stack([each[idx] for each, idx in zip(start.cpu().numpy(), np.argmax(scores2, 1))], 0) # [Q, dim]
         logger.debug(f'3) {time()-start_time:.3f}s: find start')
@@ -363,15 +363,17 @@ class MIPS(object):
         max_scores = np.concatenate((np.max(scores1, 1, keepdims=True), np.max(scores2, 1, keepdims=True)), axis=1).flatten() # [2 * Q]
         # Prepare for reconstructed vectors for query-side fine-tuning
         if return_idxs:
+            new_ends = np.expand_dims(end.cpu().numpy()[:, 0, :], 1) if self.maxsim else \
+                       np.expand_dims(np.stack([group_start['end'][0] for group_start in groups_start]), 1)
             start_vecs = np.concatenate(
-                # (np.expand_dims(np.stack([group_start['end'][0] for group_start in groups_start]), 1),
-                (np.expand_dims(end.cpu().numpy()[:, 0, :], 1),
+                (new_ends,
                  np.expand_dims(pred_start_vecs, 1)), axis=1
             ).reshape(-1, pred_start_vecs.shape[-1])
+            new_starts = np.expand_dims(pred_end_vecs, 1) if self.maxsim else \
+                         np.expand_dims(np.stack([group_end['start'][-1] for group_end in groups_end] ), 1)
             end_vecs = np.concatenate(
                 (np.expand_dims(pred_end_vecs, 1),
-                 # np.expand_dims(np.stack([group_end['start'][-1] for group_end in groups_end] ), 1)), axis=1
-                 np.expand_dims(start.cpu().numpy()[:, -1, :], 1)), axis=1
+                 new_starts), axis=1
             ).reshape(-1, pred_end_vecs.shape[-1]) # [2 * Q, dim]
             # end, start : [Q, max_ans_len, dim]
             all_phrase_vecs = np.concatenate(

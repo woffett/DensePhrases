@@ -2,7 +2,7 @@ import json
 import logging
 import numpy as np
 from tqdm import tqdm
-from densephrases.models import DensePhrases, DPHEncoder, MIPS
+from densephrases.models import DensePhrases, MaxSimEncoder, MIPS
 from densephrases.utils.squad_utils import get_question_dataloader
 from densephrases.utils.eval_utils import normalize_answer, f1_score, exact_match_score, drqa_exact_match_score, \
         drqa_regex_match_score, drqa_metric_max_over_ground_truths, drqa_normalize
@@ -141,7 +141,7 @@ def get_phrase_vecs(mips, questions, answers, outs, regex=False, max_answer_leng
     
     for b_idx, phrase_idx in enumerate(phrase_idxs):
         while len(phrase_idxs[b_idx]) < top_k * 2: # two separate top-k from start/end
-            phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)), np.zeros((768))))
+            phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)), np.zeros((768)), np.zeros((max_answer_length, 768))))
         phrase_idxs[b_idx] = phrase_idxs[b_idx][:top_k*2]
     flat_phrase_idxs = [phrase for phrase_idx in phrase_idxs for phrase in phrase_idx]
     doc_idxs = [int(phrase_idx_[0]) for phrase_idx_ in flat_phrase_idxs]
@@ -194,9 +194,9 @@ def get_top_phrases(mips, questions, answers, query_encoder, tokenizer, batch_si
     )
     for q_idx in tqdm(range(0, len(questions), step)):
         outs = query2vec(questions[q_idx:q_idx+step])
-#        start = np.concatenate([out[0] for out in outs], 0)
- #       end = np.concatenate([out[1] for out in outs], 0)
-        query_vec = outs[0] #np.concatenate([start, end], 1)
+        # start = np.concatenate([out[0] for out in outs], 0)
+        # end = np.concatenate([out[1] for out in outs], 0)
+        query_vec = np.concatenate([np.expand_dims(out[0], 0) for out in outs], 0)
 
         outs = search_fn(
             query_vec,
@@ -241,13 +241,12 @@ def embed_all_query(questions, query_encoder, tokenizer, batch_size=48):
     all_outs = []
     for q_idx in tqdm(range(0, len(questions), batch_size)):
         outs = query2vec(questions[q_idx:q_idx+batch_size])
-        all_outs += outs[0]
+        all_outs += outs
     
     #start = np.concatenate([out[0] for out in all_outs], 0)
     #end = np.concatenate([out[1] for out in all_outs], 0)
     #query_vec = np.concatenate([start, end], 1)
-    
-    query_vec = np.concatenate(all_outs, 1)
+    query_vec = np.concatenate([np.expand_dims(out[0], 0) for out in all_outs], 0)
 
     logger.info(f'Query reps: {query_vec.shape}')
     return query_vec
@@ -257,6 +256,7 @@ if __name__ == '__main__':
     index_path = '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_dev_wiki/dump/start/16384_flat_SQ4/index.faiss'
     idx2id_path = '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_dev_wiki/dump/start/16384_flat_SQ4/idx2id.hdf5'
     mips = MIPS(phrase_dump_dir = dump_dir, maxsim=True, index_path = index_path, idx2id_path = idx2id_path, cuda=True)
+    mips2 = MIPS(phrase_dump_dir = dump_dir, maxsim=False, index_path = index_path, idx2id_path = idx2id_path, cuda=True)
 
     # from load_qa_pairs
     truecase_path = '/home/ubuntu/dph/data/truecase/english_with_questions.dist' # not entirely sure what this does...
@@ -273,17 +273,20 @@ if __name__ == '__main__':
 
     config = AutoConfig.from_pretrained(pretrained_name, cache_dir = cache_dir)
     #query_encoder = DensePhrases(config = config, tokenizer = tokenizer, transformer_cls = MODEL_MAPPING[config.__class__]).to('cuda')
-    query_encoder = DPHEncoder(config = config, tokenizer = tokenizer, transformer_cls = MODEL_MAPPING[config.__class__]).to('cuda')
+    query_encoder = MaxSimEncoder(config = config, tokenizer = tokenizer, transformer_cls = MODEL_MAPPING[config.__class__]).to('cuda')
 
-    #query_vec = embed_all_query(questions[:10], query_encoder, tokenizer)
-    batch_size = 10
-    query2vec = get_query2vec(
-        query_encoder=query_encoder, tokenizer=tokenizer, batch_size=batch_size
-    )
-    outs = query2vec(questions[:10])
+    query_vec = embed_all_query(questions[:10], query_encoder, tokenizer)
+    pbar = get_top_phrases(
+        mips, questions, answers, query_encoder, tokenizer,
+        10, '/home/ubuntu/DensePhrases/splits_7500/train.json')
+    # batch_size = 10
+    # query2vec = get_query2vec(
+    #     query_encoder=query_encoder, tokenizer=tokenizer, batch_size=batch_size
+    # )
+    # outs = query2vec(questions[:10])
     
-    all_outs = [np.expand_dims(out[0], axis=0) for out in outs]
-    query_vec = np.concatenate(all_outs, 0)
+    # all_outs = [np.expand_dims(out[0], axis=0) for out in outs]
+    # query_vec = np.concatenate(all_outs, 0)
 
     """
     for q_idx in range(0, len(questions), batch_size):
@@ -300,12 +303,46 @@ if __name__ == '__main__':
 
         break
     """
-    result = mips.search(
-        query_vec,
-        q_texts=questions[:batch_size], nprobe=256,
-        top_k=100, max_answer_length=10,
-    )
+    # result = mips.search(
+    #     query_vec,
+    #     q_texts=questions[:batch_size], nprobe=256,
+    #     top_k=100, max_answer_length=10,
+    #     return_idxs=True
+    # )
+    # result2 = mips2.search(
+    #     np.concatenate([query_vec[:, 0, :], query_vec[:, -1, :]], 1),
+    #     q_texts=questions[:batch_size], nprobe=256,
+    #     top_k=100, max_answer_length=10,
+    #     return_idxs=True
+    # )
 
-    svs, evs, pvs, tgts = get_phrase_vecs(mips, questions, answers, result)
+    # phrase_idxs = [[(out_['doc_idx'], out_['start_idx'], out_['end_idx'], out_['answer'],
+    #     out_['start_vec'], out_['end_vec'], out_['phrase_vecs']) for out_ in out]
+    #     for out in result
+    # ]
+    # max_answer_length = 10
+    # top_k = 100
+    # for b_idx, phrase_idx in enumerate(phrase_idxs):
+    #     while len(phrase_idxs[b_idx]) < top_k * 2: # two separate top-k from start/end
+    #         phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)), np.zeros((768)), np.zeros((max_answer_length, 768))))
+    #     phrase_idxs[b_idx] = phrase_idxs[b_idx][:top_k*2]
+    # flat_phrase_idxs = [phrase for phrase_idx in phrase_idxs for phrase in phrase_idx]
+    # doc_idxs = [int(phrase_idx_[0]) for phrase_idx_ in flat_phrase_idxs]
+    # start_idxs = [int(phrase_idx_[1]) for phrase_idx_ in flat_phrase_idxs]
+    # end_idxs = [int(phrase_idx_[2]) for phrase_idx_ in flat_phrase_idxs]
+    # phrases = [phrase_idx_[3] for phrase_idx_ in flat_phrase_idxs]
+    # start_vecs = [phrase_idx_[4] for phrase_idx_ in flat_phrase_idxs]
+    # end_vecs = [phrase_idx_[5] for phrase_idx_ in flat_phrase_idxs]
+    # phrase_vecs = [phrase_idx_[6] for phrase_idx_ in flat_phrase_idxs]
+    # svs, evs, pvs, tgts = get_phrase_vecs(mips, questions[:batch_size], answers[:batch_size], result2)
     # for training
-    # dataloader, examples, features = get_question_dataloader(questions, tokenizer, batch_size = 10)
+    train_dataloader, _, _ = get_question_dataloader(
+                questions[:batch_size], tokenizer, 64, batch_size=10
+            )
+
+    # svs_t = torch.Tensor(svs).to(device)
+    # evs_t = torch.Tensor(evs).to(device)
+    # pvs_t = torch.Tensor(pvs).to(device)
+    # tgts_t = [torch.Tensor([tgt_ for tgt_ in tgt if tgt_ is not None]).to(device) for tgt in tgts]
+
+    # loss, accs = query_encoder.train_query(input_ids_ = input_ids, attention_mask_ = attention_mask, token_type_ids_ = token_type_ids, start_vecs = svs_t, end_vecs = evs_t, phrase_vecs = pvs_t, targets = tgts_t)

@@ -16,9 +16,9 @@ from tqdm import tqdm
 
 from .encoder import DensePhrases
 
-class DPHEncoder(DensePhrases):
+class MaxSimEncoder(DensePhrases):
     def __init__(self, *args, **kwargs):
-        super(DPHEncoder, self).__init__(*args, **kwargs)
+        super(MaxSimEncoder, self).__init__(*args, **kwargs)
         self.query_encoder = copy.deepcopy(self.phrase_encoder)
 
     def embed_phrase(self, input_ids, attention_mask, token_type_ids):
@@ -243,7 +243,7 @@ class DPHEncoder(DensePhrases):
         # Start/end dense logits
         start_logits = query_start.matmul(start_vecs.transpose(1, 2)).squeeze(1)
         end_logits = query_end.matmul(end_vecs.transpose(1, 2)).squeeze(1)
-        #logits = start_logits + end_logits
+        # logits = start_logits + end_logits
 
         
         logits = torch.einsum('bsd,bcdt->bcst', query_vec, phrase_vecs.permute(0, 1, 3, 2))
