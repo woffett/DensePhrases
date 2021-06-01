@@ -1,121 +1,54 @@
+import json
+import argparse
 import torch
-import torch.nn as nn
-import math
+import os
 import random
-import copy
+import numpy as np
+import requests
 import logging
+import math
+import copy
+import wandb
+import string
 
-from collections import deque
+from time import time
+from tqdm import tqdm
 from torch.nn import CrossEntropyLoss
 from torch.nn.functional import binary_cross_entropy_with_logits, embedding, one_hot, softmax, log_softmax, dropout
-from transformers import PreTrainedModel
 
-logger = logging.getLogger(__name__)
+from .encoder import DensePhrases
 
-class DensePhrases(PreTrainedModel):
-    def __init__(self,
-                 config,
-                 tokenizer,
-                 pretrained=None,
-                 transformer_cls=None,
-                 lambda_kl=False,
-                 lambda_neg=False,
-                 lambda_flt=False,
-                 pbn_size=False):
-        super().__init__(config)
-        self.tokenizer = tokenizer
-
-        # Additional parameters
-        self.filter_linear = nn.Linear(config.hidden_size, 2)
-
-        # Arguments
-        self.lambda_kl = lambda_kl
-        self.lambda_neg = lambda_neg
-        self.lambda_flt = lambda_flt
-        self.pbn_size = pbn_size
-        self.pre_batch = None
-        self.apply(self.init_weights)
-
-        # Load transformer after init
-        assert pretrained is not None or transformer_cls is not None
-        logger.info('Pre-trained LM loaded' if pretrained else 'Not initialized but will be loaded')
-        if lambda_kl > 0:
-            logger.info("Teacher initialized for distillation. Weights will be loaded.")
-            self.cross_encoder = None
-            self.qa_outputs = None
-
-        # Encoders: three LMs
-        self.phrase_encoder = pretrained if pretrained is not None else transformer_cls(config)
-        self.query_start_encoder = copy.deepcopy(self.phrase_encoder)
-        self.query_end_encoder = copy.deepcopy(self.phrase_encoder)
-
-    def init_pre_batch(self, pbn_size):
-        """ Initialize a pre-batch queue """
-        self.pre_batch = deque(maxlen=pbn_size)
-
-    def init_weights(self, module):
-        """ Initialize the weights """
-        if isinstance(module, (nn.Linear, nn.Embedding)):
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
-        if isinstance(module, nn.Linear) and module.bias is not None:
-            module.bias.data.zero_()
-
-    def merge_inputs(self, input_ids_, attention_mask_, input_ids, attention_mask):
-        """ Merge queries and passages for the cross encoder """
-        new_input_ids = []
-        new_attention_mask = []
-        new_token_type_ids = []
-        max_len = input_ids_[0].shape[0] + input_ids[0].shape[0]
-        for input_id_, att_mask_, input_id, att_mask in zip(input_ids_, attention_mask_, input_ids, attention_mask):
-            new_input_id = torch.zeros(max_len).long().to(self.device)
-            sep_input_id = input_id[1:att_mask.sum()]
-            new_input_id[:att_mask_.sum()+att_mask.sum()-1] = torch.cat(
-                [input_id_[:att_mask_.sum()], sep_input_id], dim=0
-            )
-            new_input_ids.append(new_input_id)
-            new_attention_mask.append((new_input_id != self.tokenizer.pad_token_id).long())
-            new_token_type_ids.append((
-                torch.cat([
-                    torch.zeros(att_mask_.sum(0)).long().to(self.device),
-                    torch.ones(att_mask.sum(0) - 1).long().to(self.device),
-                    torch.zeros(max_len - att_mask.sum(0) - att_mask_.sum(0) + 1).long().to(self.device)
-                ])
-            ))
-        new_input_ids = torch.stack(new_input_ids)
-        new_attention_mask = torch.stack(new_attention_mask)
-        new_token_type_ids = torch.stack(new_token_type_ids)
-        return new_input_ids, new_attention_mask, new_token_type_ids
+class MaxSimEncoder(DensePhrases):
+    def __init__(self, *args, **kwargs):
+        super(MaxSimEncoder, self).__init__(*args, **kwargs)
+        self.query_encoder = copy.deepcopy(self.phrase_encoder)
 
     def embed_phrase(self, input_ids, attention_mask, token_type_ids):
         """ Get phrase embeddings (token-wise) """
+        
         outputs_s = self.phrase_encoder(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
         )
+        
         sequence_output_s = outputs_s[0]
         sequence_output_e = outputs_s[0]
         start = sequence_output_s[:,:,:]
         end = sequence_output_e[:,:,:]
+        
         return start, end
-
     def embed_query(self, input_ids_, attention_mask_, token_type_ids_):
         """ Get query start/end embeddings """
-        outputs_s_ = self.query_start_encoder(
+
+        output = self.query_encoder(
             input_ids_,
             attention_mask=attention_mask_,
             token_type_ids=token_type_ids_,
-        )
-        outputs_e_ = self.query_end_encoder(
-            input_ids_,
-            attention_mask=attention_mask_,
-            token_type_ids=token_type_ids_,
-        )
-        sequence_output_s_ = outputs_s_[0]
-        sequence_output_e_ = outputs_e_[0]
-        query_start = sequence_output_s_[:,:1,:]
-        query_end = sequence_output_e_[:,:1,:]
-        return query_start, query_end
+            )
+        query_vec = output[0]
+
+        return query_vec, query_vec
 
     def forward(
         self,
@@ -142,10 +75,10 @@ class DensePhrases(PreTrainedModel):
         # Query-side
         if input_ids_ is not None:
             assert len(input_ids_.size()) == 2
-            query_start, query_end = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
+            query_vecs = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
 
             if return_query:
-                return (query_start, query_end)
+                return query_vecs
 
         # Get dense logits
         start_logits = start.matmul(query_start.transpose(1, 2)).squeeze(-1)
@@ -290,29 +223,34 @@ class DensePhrases(PreTrainedModel):
 
             outputs = (total_loss,) + outputs
         return outputs  # (loss), start_logits, end_logits, filter_start_logits, filter_end_logits
-
+    
     def train_query(
-        self,
-        input_ids_=None, attention_mask_=None, token_type_ids_=None,
-        start_vecs=None, end_vecs=None,
-        targets=None,
-        phrase_vecs=None
-    ):
+            self,
+            input_ids_=None, attention_mask_=None, token_type_ids_=None,
+            start_vecs=None, end_vecs=None, phrase_vecs=None,
+            targets=None,
+        ):
+        
         # Skip if no targets for phrases
         if start_vecs is not None:
             if all([len(t) == 0 for t in targets]):
                 return None, None
 
         # Compute query embedding
-        # batch_size x emb_dim
-        query_start, query_end = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
+        query_vec, _ = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
+        
+        query_start = query_vec[:, :1, :]
+        query_end = query_vec[:, -1:, :]
 
         # Start/end dense logits
-        # start,end_vecs : batch_size x (top_k * 2) x emb_dim
-        # start,end_logits : batch_size x (top_k * 2)
         start_logits = query_start.matmul(start_vecs.transpose(1, 2)).squeeze(1)
         end_logits = query_end.matmul(end_vecs.transpose(1, 2)).squeeze(1)
-        logits = start_logits + end_logits
+        # logits = start_logits + end_logits
+
+        
+        logits = torch.einsum('bsd,bcdt->bcst', query_vec, phrase_vecs.permute(0, 1, 3, 2))
+        logits = torch.max(logits, dim = -1)[0]
+        logits = torch.sum(logits, dim = -1)
 
         # MML over targets
         MIN_PROB = 1e-7
@@ -335,4 +273,5 @@ class DensePhrases(PreTrainedModel):
 
         _, rerank_idx = torch.sort(logits, -1, descending=True)
         top1_acc = [rerank[0] in target for rerank, target in zip(rerank_idx, targets)]
+        
         return log_probs, top1_acc
