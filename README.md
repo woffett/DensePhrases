@@ -125,7 +125,12 @@ Train with:
 export MODEL_NAME=dph-nqsqd-pb2-wiki7500-query-side
 make train-query DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ MODEL_NAME=$MODEL_NAME
 ```
+This is going to take about 2.5 hours per epoch and run for 5 epochs.
 
+Evaluate with
+```
+make eval-od MODEL_NAME=dph-nqsqd-pb2-wiki7500-query-side DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=32000
+```
 
 
 ## Original README starts here
