@@ -132,6 +132,14 @@ Evaluate with
 make eval-od MODEL_NAME=dph-nqsqd-pb2-wiki7500-query-side DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=32000
 ```
 
+Results:
+```
+{'exact_match_top1': 38.13333333333333, 'f1_score_top1': 47.41714285714288, 'precision_score_top1': 48.924444444444426, 'recall_score_top1': 47.75111111111111}
+{'exact_match_top10': 64.26666666666667, 'f1_score_top10': 73.48110630110631, 'precision_score_top10': 75.70111111111112, 'recall_score_top10': 73.39333333333332, 'Success @ 1': 51.06666666666667, 'Success @ 2': 59.599999999999994, 'Success @ 5': 70.13333333333334, 'Success @ 10': 75.73333333333333, 'Success @ 15': 77.46666666666667, 'Success @ 20': 77.60000000000001}
+```
+
+### TODO: Maxsim query-side fine-tuning
+...
 
 ## Original README starts here
 
