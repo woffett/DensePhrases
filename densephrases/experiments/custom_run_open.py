@@ -1,4 +1,3 @@
-import functools
 import json
 import argparse
 import torch
@@ -11,26 +10,16 @@ import math
 import copy
 import wandb
 import string
-import regex
-import unicodedata
 
 from time import time
 from tqdm import tqdm
 
-from densephrases.models import DensePhrases, MaxSimEncoder, MIPS, MIPSLight
+from densephrases.models import DPHEncoder, DensePhrases, MIPS, MIPSLight
 from densephrases.utils.single_utils import backward_compat
 from densephrases.utils.squad_utils import get_question_dataloader, TrueCaser
 from densephrases.utils.embed_utils import get_question_results
-from densephrases.utils.eval_utils import (
-    normalize_answer,
-    f1_score,
-    exact_match_score,
-    drqa_exact_match_score,
-    drqa_regex_match_score,
-    drqa_metric_max_over_ground_truths,
-    drqa_normalize,
-    success_at_k,
-)
+from densephrases.utils.eval_utils import normalize_answer, f1_score, exact_match_score, drqa_exact_match_score, \
+        drqa_regex_match_score, drqa_metric_max_over_ground_truths, drqa_normalize
 from densephrases.utils.kilt.eval import evaluate as kilt_evaluate
 from densephrases.utils.kilt.kilt_utils import store_data as kilt_store_data
 
@@ -65,8 +54,7 @@ def load_query_encoder(device, args):
     )
 
     # Pre-trained DensePhrases
-    model_fn = DensePhrases if not args.maxsim else MaxSimEncoder
-    model = model_fn(
+    model = DPHEncoder(
         config=config,
         tokenizer=tokenizer,
         transformer_cls=MODEL_MAPPING[config.__class__],
@@ -120,7 +108,6 @@ def load_phrase_index(args, load_light=False):
         index_path=index_path,
         idx2id_path=idx2id_path,
         cuda=args.cuda,
-        maxsim=args.maxsim,
         logging_level=logging.DEBUG if args.debug else logging.INFO
     )
     return mips
@@ -135,12 +122,9 @@ def embed_all_query(questions, args, query_encoder, tokenizer, batch_size=48):
     for q_idx in tqdm(range(0, len(questions), batch_size)):
         outs = query2vec(questions[q_idx:q_idx+batch_size])
         all_outs += outs
-    if args.maxsim:
-        query_vec = np.concatenate([np.expand_dims(out[0], 0) for out in all_outs], 0)
-    else:
-        start = np.concatenate([out[0] for out in all_outs], 0)
-        end = np.concatenate([out[1] for out in all_outs], 0)
-        query_vec = np.concatenate([start, end], 1)
+    start = np.concatenate([out[0] for out in all_outs], 0)
+    end = np.concatenate([out[1] for out in all_outs], 0)
+    query_vec = np.concatenate([start, end], 1)
     logger.info(f'Query reps: {query_vec.shape}')
     return query_vec
 
@@ -268,10 +252,6 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
     exact_match_top1 = 0
     f1_score_topk = 0
     f1_score_top1 = 0
-    precision_score_topk = 0
-    precision_score_top1 = 0
-    recall_score_topk = 0
-    recall_score_top1 = 0
     pred_out = {}
     for i in range(len(predictions)):
         # For debugging
@@ -291,72 +271,33 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
 
         f1_topk = 0
         f1_top1 = 0
-        precision_topk = 0
-        precision_top1 = 0
-        recall_topk = 0
-        recall_top1 = 0
         if not args.regex:
-            def f1(x, y): return f1_score(x, y)[0]
-            def precision(x, y): return f1_score(x, y)[1]
-            def recall(x, y): return f1_score(x, y)[2]
-
-            def topk(fn):
-                return max(
-                    [drqa_metric_max_over_ground_truths(fn, p, answers[i])
-                     for p in predictions[i][:args.top_k]]
-                )
-
-            def top1(fn): return drqa_metric_max_over_ground_truths(fn, top1_preds[i], answers[i])
-
-            # f1
-            f1_topk = topk(f1)
-            f1_top1 = top1(f1)
+            match_fn = lambda x, y: f1_score(x, y)[0]
+            f1_topk = max([drqa_metric_max_over_ground_truths(
+                match_fn, prediction, answers[i]
+            ) for prediction in predictions[i][:args.top_k]])
+            f1_top1 = drqa_metric_max_over_ground_truths(
+                match_fn, top1_preds[i], answers[i]
+            )
             f1_score_topk += f1_topk
             f1_score_top1 += f1_top1
-            # precision
-            precision_topk = topk(precision)
-            precision_top1 = top1(precision)
-            precision_score_topk += precision_topk
-            precision_score_top1 += precision_top1
-            # recall
-            recall_topk = topk(recall)
-            recall_top1 = top1(recall)
-            recall_score_topk += recall_topk
-            recall_score_top1 += recall_top1
 
         pred_out[qids[i]] = {
-            'question': questions[i],
-            'answer': answers[i], 'prediction': predictions[i], 'score': scores[i], 'title': titles[i],
-            'evidence': evidences[i] if evidences is not None else '',
-            'em_top1': bool(em_top1), f'em_top{args.top_k}': bool(em_topk),
-            'f1_top1': f1_top1, f'f1_top{args.top_k}': f1_topk,
-            'precision_top1': precision_top1, f'precision_top{args.top_k}': precision_topk,
-            'recall_top1': recall_top1, f'recall_top{args.top_k}': recall_topk,
-            'q_tokens': q_tokens[i] if q_tokens is not None else ['']
+                'question': questions[i],
+                'answer': answers[i], 'prediction': predictions[i], 'score': scores[i], 'title': titles[i],
+                'evidence': evidences[i] if evidences is not None else '',
+                'em_top1': bool(em_top1), f'em_top{args.top_k}': bool(em_topk),
+                'f1_top1': f1_top1, f'f1_top{args.top_k}': f1_topk,
+                'q_tokens': q_tokens[i] if q_tokens is not None else ['']
         }
 
-    def pct(val: float) -> float: return 100.0 * val / total
-
     total = len(predictions)
-    logger.info({
-        'exact_match_top1': pct(exact_match_top1),
-        'f1_score_top1': pct(f1_score_top1),
-        'precision_score_top1': pct(precision_score_top1),
-        'recall_score_top1': pct(recall_score_top1),
-    })
-
-    ks = sorted({1, 2, 5, 10, 15, 20}.union({args.top_k}))
-    success_at_ks = {
-        f"Success @ {k}": 100 * success_at_k(answers, evidences, k)
-        for k in ks
-    }
-    logger.info({
-        f'exact_match_top{args.top_k}': pct(exact_match_topk),
-        f'f1_score_top{args.top_k}': pct(f1_score_topk),
-        f'precision_score_top{args.top_k}': pct(precision_score_topk),
-        f'recall_score_top{args.top_k}': pct(recall_score_topk),
-        **success_at_ks,
-    })
+    exact_match_top1 = 100.0 * exact_match_top1 / total
+    f1_score_top1 = 100.0 * f1_score_top1 / total
+    logger.info({'exact_match_top1': exact_match_top1, 'f1_score_top1': f1_score_top1})
+    exact_match_topk = 100.0 * exact_match_topk / total
+    f1_score_topk = 100.0 * f1_score_topk / total
+    logger.info({f'exact_match_top{args.top_k}': exact_match_topk, f'f1_score_top{args.top_k}': f1_score_topk})
     wandb.log(
         {"Top1 EM": exact_match_top1, "Top1 F1": f1_score_top1,
          "Topk EM": exact_match_topk, "Topk F1": f1_score_topk}
@@ -376,7 +317,7 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
     with open(pred_path, 'w') as f:
         json.dump(pred_out, f)
 
-    return exact_match_top1 / total
+    return exact_match_top1
 
 
 def evaluate_results_kilt(predictions, qids, questions, answers, args, evidences, scores, titles):
@@ -537,13 +478,11 @@ def train_query_encoder(args, mips=None):
             train_dataloader, _, _ = get_question_dataloader(
                 questions, tokenizer, args.max_query_length, batch_size=args.per_gpu_train_batch_size
             )
-            svs, evs, pvs, tgts = get_phrase_vecs(mips, questions, answers, outs, args)
+            svs, evs, tgts = get_phrase_vecs(mips, questions, answers, outs, args)
 
             target_encoder.train()
             svs_t = torch.Tensor(svs).to(device)
             evs_t = torch.Tensor(evs).to(device)
-            pvs_t = torch.Tensor(pvs).to(device)
-
             tgts_t = [torch.Tensor([tgt_ for tgt_ in tgt if tgt_ is not None]).to(device) for tgt in tgts]
 
             # Train query encoder
@@ -554,7 +493,6 @@ def train_query_encoder(args, mips=None):
                     input_ids_=batch[0], attention_mask_=batch[1], token_type_ids_=batch[2],
                     start_vecs=svs_t,
                     end_vecs=evs_t,
-                    phrase_vecs=pvs_t,
                     targets=tgts_t
                 )
 
@@ -636,10 +574,7 @@ def get_top_phrases(mips, questions, answers, query_encoder, tokenizer, batch_si
         outs = query2vec(questions[q_idx:q_idx+step])
         start = np.concatenate([out[0] for out in outs], 0)
         end = np.concatenate([out[1] for out in outs], 0)
-        if args.maxsim:
-            query_vec = np.concatenate([np.expand_dims(out[0], 0) for out in outs], 0)
-        else:
-            query_vec = np.concatenate([start, end], 1)
+        query_vec = np.concatenate([start, end], 1)
 
         outs = search_fn(
             query_vec,
@@ -655,15 +590,12 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
 
     # Get phrase and vectors
     phrase_idxs = [[(out_['doc_idx'], out_['start_idx'], out_['end_idx'], out_['answer'],
-        out_['start_vec'], out_['end_vec'], out_['phrase_vecs']) for out_ in out]
+        out_['start_vec'], out_['end_vec']) for out_ in out]
         for out in outs
     ]
-    
     for b_idx, phrase_idx in enumerate(phrase_idxs):
         while len(phrase_idxs[b_idx]) < args.top_k * 2: # two separate top-k from start/end
-            phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)),
-                                       np.zeros((768)),
-                                       np.zeros((args.max_answer_length, 768))))
+            phrase_idxs[b_idx].append((-1, 0, 0, '', np.zeros((768)), np.zeros((768))))
         phrase_idxs[b_idx] = phrase_idxs[b_idx][:args.top_k*2]
     flat_phrase_idxs = [phrase for phrase_idx in phrase_idxs for phrase in phrase_idx]
     doc_idxs = [int(phrase_idx_[0]) for phrase_idx_ in flat_phrase_idxs]
@@ -672,7 +604,6 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
     phrases = [phrase_idx_[3] for phrase_idx_ in flat_phrase_idxs]
     start_vecs = [phrase_idx_[4] for phrase_idx_ in flat_phrase_idxs]
     end_vecs = [phrase_idx_[5] for phrase_idx_ in flat_phrase_idxs]
-    phrase_vecs = [phrase_idx_[6] for phrase_idx_ in flat_phrase_idxs]
 
     start_vecs = np.stack(
         # [mips.dequant(mips.offset, mips.scale, start_vec) # Use this for IVFSQ4
@@ -685,8 +616,6 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
         [end_vec
          for end_vec, end_idx in zip(end_vecs, end_idxs)]
     )
-
-    phrase_vecs = np.stack(phrase_vecs)
 
     zero_mask = np.array([[1] if doc_idx >= 0 else [0] for doc_idx in doc_idxs])
     start_vecs = start_vecs * zero_mask
@@ -702,9 +631,7 @@ def get_phrase_vecs(mips, questions, answers, outs, args):
     batch_size = len(answers)
     start_vecs = np.reshape(start_vecs, (batch_size, args.top_k*2, -1))
     end_vecs = np.reshape(end_vecs, (batch_size, args.top_k*2, -1))
-    phrase_vecs = np.reshape(phrase_vecs, (batch_size, args.top_k*2, args.max_answer_length, -1))
-
-    return start_vecs, end_vecs, phrase_vecs, targets
+    return start_vecs, end_vecs, targets
 
 
 if __name__ == '__main__':
@@ -767,7 +694,6 @@ if __name__ == '__main__':
     # Run mode
     parser.add_argument('--run_mode', default='train_query')
     parser.add_argument('--cuda', default=False, action='store_true')
-    parser.add_argument('--maxsim', default=False, action='store_true')
     parser.add_argument('--draft', default=False, action='store_true')
     parser.add_argument('--debug', default=False, action='store_true')
     parser.add_argument('--wandb', default=False, action='store_true')
