@@ -350,7 +350,7 @@ train-query: dump-dir model-name nq-wiki7500-data
 		--learning_rate 3e-5 \
 		--num_train_epochs 5 \
 		--dump_dir $(DUMP_DIR) \
-		--index_dir start/16384_flat_SQ4 \
+		--index_dir start/$(NUM_CLUSTERS)_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/dph-nqsqd-pb2 \
 		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--top_k 100 \

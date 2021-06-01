@@ -96,26 +96,6 @@ fails! seems to be safe to skip though
 make index-merge DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
 ```
 
-error:
-```
-Traceback (most recent call last):
-  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 193, in _run_module_as_main
-    "__main__", mod_spec)
-  File "/home/ubuntu/anaconda3/envs/dph/lib/python3.7/runpy.py", line 85, in _run_code
-    exec(code, run_globals)
-  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 376, in <module>
-    main()
-  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 372, in main
-    run_index(args)
-  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 359, in run_index
-    merge_indexes(args.subindex_dir, args.trained_index_path, args.index_path, args.idx2id_path, args.inv_path)
-  File "/home/ubuntu/DensePhrases/densephrases/experiments/create_index.py", line 260, in merge_indexes
-    names = os.listdir(subindex_dir)
-FileNotFoundError: [Errno 2] No such file or directory: '/home/ubuntu/dph/outputs/dph-nqsqd-pb2_wiki7500/dump/start/100000_flat_SQ4/index'
-Makefile:230: recipe for target 'index-merge' failed
-make: *** [index-merge] Error 1
-```
-
 ### Evaluate
 ```
 NUM_CLUSTERS=32000
@@ -124,9 +104,29 @@ make eval-od MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7
 
 Takes about 10 mins and returns:
 ```
-05/30/2021 19:51:30 - INFO - __main__ -   {'exact_match_top1': 34.8, 'f1_score_top1': 44.22412698412702, 'precision_score_top1': 45.82571428571429, 'recall_score_top1': 44.788888888888856}
-05/30/2021 19:51:34 - INFO - __main__ -   {'exact_match_top10': 61.733333333333334, 'f1_score_top10': 70.02427128427126, 'precision_score_top10': 72.13555555555556, 'recall_score_top10': 70.07777777777777, 'Success @ 1': 0.47333333333333333, 'Success @ 2': 0.5773333333333334, 'Success @ 5': 0.6613333333333333, 'Success @ 10': 0.72, 'Success @ 15': 0.7413333333333333, 'Success @ 20': 0.7413333333333333}
+{'exact_match_top1': 34.8, 'f1_score_top1': 44.22412698412702, 'precision_score_top1': 45.82571428571429, 'recall_score_top1': 44.788888888888856}
+{'exact_match_top10': 61.733333333333334, 'f1_score_top10': 70.02427128427126, 'precision_score_top10': 72.13555555555556, 'recall_score_top10': 70.07777777777777, 'Success @ 1': 47.333333333333336, 'Success @ 2': 57.733333333333334, 'Success @ 5': 66.13333333333333, 'Success @ 10': 72.0, 'Success @ 15': 74.13333333333333, 'Success @ 20': 74.13333333333333}
 ```
+
+Baseline `maxsim` before query-side fine-tuning
+```
+make eval-maxsim MODEL_NAME=dph-nqsqd-pb2 DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ NUM_CLUSTERS=$NUM_CLUSTERS
+```
+
+Returns:
+```
+{'exact_match_top1': 0.0, 'f1_score_top1': 0.21587301587301586, 'precision_score_top1': 0.3, 'recall_score_top1': 0.17777777777777776}
+{'exact_match_top10': 0.0, 'f1_score_top10': 0.3358730158730159, 'precision_score_top10': 0.5666666666666667, 'recall_score_top10': 0.25555555555555554, 'Success @ 1': 0.8, 'Success @ 2': 1.4666666666666666, 'Success @ 5': 2.2666666666666666, 'Success @ 10': 4.0, 'Success @ 15': 4.3999999999999995, 'Success @ 20': 5.066666666666666}
+```
+
+### Query-side fine-tuning
+Train with:
+```
+export MODEL_NAME=dph-nqsqd-pb2-wiki7500-query-side
+make train-query DUMP_DIR=$DPH_SAVE_DIR/dph-nqsqd-pb2_wiki7500/dump/ MODEL_NAME=$MODEL_NAME
+```
+
+
 
 ## Original README starts here
 
