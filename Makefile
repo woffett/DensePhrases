@@ -266,7 +266,6 @@ limit-threads:
 
 # Dataset paths for open-domain QA and slot filling (with options)
 nq-wiki7500-data:
-	$(eval DPH_DATA_DIR=/home/ubuntu/DensePhrases)
 	$(eval TRAIN_DATA=splits_7500/train.json)
 	$(eval DEV_DATA=splits_7500/dev.json)
 	$(eval TEST_DATA=splits_7500/test.json)
@@ -377,6 +376,7 @@ train-maxsim: dump-dir model-name nq-wiki7500-data
 		--top_k 100 \
 		--cuda \
 		--maxsim \
+		--maxsim_warmup 300 \
 		$(OPTIONS)
 
 # 		--index_dir start/1048576_flat_PQ96_8 \

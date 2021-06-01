@@ -534,6 +534,7 @@ def train_query_encoder(args, mips=None):
     # Train arguments
     args.per_gpu_train_batch_size = int(args.per_gpu_train_batch_size / args.gradient_accumulation_steps)
     best_acc = -1000.0
+    total_steps = 0
     for ep_idx in range(int(args.num_train_epochs)):
 
         # Training
@@ -545,7 +546,7 @@ def train_query_encoder(args, mips=None):
         _, questions, answers = load_qa_pairs(args.train_path, args, shuffle=True)
         pbar = tqdm(get_top_phrases(
             mips, questions, answers, pretrained_encoder, tokenizer,
-            args.per_gpu_train_batch_size, args.train_path, args)
+            args.per_gpu_train_batch_size, args.train_path, args, cur_steps = total_steps)
         )
 
         for step_idx, (questions, answers, outs) in enumerate(pbar):
@@ -603,7 +604,7 @@ def train_query_encoder(args, mips=None):
                 else:
                     total_accs += [0.0]*len(tgts_t)
                     total_accs_k += [0.0]*len(tgts_t)
-
+            total_steps += 1
         step_idx += 1
         logger.info(
             f"Avg train loss ({step_idx} iterations): {total_loss/step_idx:.2f} | train " +
@@ -639,7 +640,8 @@ def train_query_encoder(args, mips=None):
     logger.info(f"Best model has acc {best_acc:.3f} saved as {save_path}")
 
 
-def get_top_phrases(mips, questions, answers, query_encoder, tokenizer, batch_size, path, args):
+def get_top_phrases(mips, questions, answers, query_encoder, tokenizer, batch_size, path, args,
+                    cur_steps = 0):
     # Search
     step = batch_size
     phrase_idxs = []
@@ -647,12 +649,25 @@ def get_top_phrases(mips, questions, answers, query_encoder, tokenizer, batch_si
     query2vec = get_query2vec(
         query_encoder=query_encoder, tokenizer=tokenizer, args=args, batch_size=batch_size
     )
+    if args.maxsim and args.maxsim_warmup > 0:
+        args2 = copy.copy(args)
+        args2.maxsim = False
+        mips2 = load_phrase_index(args2)
     for q_idx in tqdm(range(0, len(questions), step)):
         outs = query2vec(questions[q_idx:q_idx+step])
         start = np.concatenate([out[0] for out in outs], 0)
         end = np.concatenate([out[1] for out in outs], 0)
         if args.maxsim:
             query_vec = np.concatenate([np.expand_dims(out[0], 0) for out in outs], 0)
+            if (args.maxsim_warmup > 0) and (cur_steps + (q_idx // step)) <= args.maxsim_warmup:
+                query_vec = np.concatenate(
+                    [query_vec[:, 0, :],
+                     query_vec[:, -1, :]],
+                    1
+                )
+                search_fn = mips2.search
+            else:
+                search_fn = mips.search
         else:
             query_vec = np.concatenate([start, end], 1)
 
@@ -787,6 +802,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', default=False, action='store_true')
     parser.add_argument('--wandb', default=False, action='store_true')
     parser.add_argument('--seed', default=1992, type=int)
+    parser.add_argument('--maxsim_warmup', default=0, type=int)
     args = parser.parse_args()
 
     # Seed for reproducibility
