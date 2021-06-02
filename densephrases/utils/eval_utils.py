@@ -373,11 +373,16 @@ def has_answer(tokenized_answers, text):
     return False
 
 
+def dpr_has_answer(passage: str, answers: List[str]) -> bool:
+    answers_tok = map(DPR_normalize, answers)
+    return has_answer(answers_tok, passage)
+
+
 def success_at_k_one(
         answers: List[str],
         evidences: List[str],
         k: int,
-        has_answer_fn: HasAnswerFn,
+        has_answer_fn: HasAnswerFn = dpr_has_answer,
 ) -> bool:
     """
     for a single instance.
@@ -389,11 +394,6 @@ def success_at_k_one(
         has_answer_fn(e, answers)
         for e in evidences[:k]
     )
-
-
-def dpr_has_answer(passage: str, answers: List[str]) -> bool:
-    answers_tok = map(DPR_normalize, answers)
-    return has_answer(answers_tok, passage)
 
 
 def success_at_k(

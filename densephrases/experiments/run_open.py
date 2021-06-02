@@ -30,6 +30,7 @@ from densephrases.utils.eval_utils import (
     drqa_metric_max_over_ground_truths,
     drqa_normalize,
     success_at_k,
+    success_at_k_one,
 )
 from densephrases.utils.kilt.eval import evaluate as kilt_evaluate
 from densephrases.utils.kilt.kilt_utils import store_data as kilt_store_data
@@ -232,6 +233,8 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
     wandb.init(project="DensePhrases (open)", mode="online" if args.wandb else "disabled")
     wandb.config.update(args)
 
+    ks = sorted({1, 2, 5, 10, 15, 20}.union({args.top_k}))
+
     # Filter if there's candidate
     if args.candidate_path is not None:
         candidates = set()
@@ -332,7 +335,8 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
             'f1_top1': f1_top1, f'f1_top{args.top_k}': f1_topk,
             'precision_top1': precision_top1, f'precision_top{args.top_k}': precision_topk,
             'recall_top1': recall_top1, f'recall_top{args.top_k}': recall_topk,
-            'q_tokens': q_tokens[i] if q_tokens is not None else ['']
+            'q_tokens': q_tokens[i] if q_tokens is not None else [''],
+            **{f"Success @ {k}": success_at_k_one(answers[i], evidences[i], k) for k in ks}
         }
 
     def pct(val: float) -> float: return 100.0 * val / total
@@ -346,7 +350,6 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
         'recall_score_top1': pct(recall_score_top1),
     })
 
-    ks = sorted({1, 2, 5, 10, 15, 20}.union({args.top_k}))
     success_at_ks = {
         f"Success @ {k}": 100 * success_at_k(answers, evidences, k)
         for k in ks
